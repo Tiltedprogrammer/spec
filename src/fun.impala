@@ -1,0 +1,58 @@
+
+extern "C" {
+    fn println(a : int) -> ();
+}
+
+struct Keys{
+    array : [u8 * 9],
+}
+
+fn @(false)range_(mut b: i32, e: i32, body: fn(int) -> ()) -> () {
+    while b < e {
+        body(b++)
+    }
+}
+
+
+fn get42(@keys : Keys, values: &[u8], @key: u8) -> u8 {
+    // let grid   = (1, 1, 1);
+    // let block  = (1, 1, 1);
+    // let device = 0;
+    // let buf = alloc_cuda_unified(0,sizeof[int]());
+    // let buf_ = bitcast[&mut[i32 * 1]](buf.data);
+    // buf_(0) = 0;
+    let mut res = 0;
+    // with cuda(device, grid, block){
+
+            for i in range_(0,9) {
+                if keys.array(i) == key {// == key
+                    // buf_(0) = i;
+                    res = i;
+
+                }
+            }
+        // }
+
+    // synchronize_cuda(device);
+    // res = buf_(0);
+    // release(buf);
+    values(res)
+    
+
+}
+
+// extern fn dummy() -> () {
+    // let b = get42(a);
+    //let b = pow_(2,4);
+    // pe_info("array index",b);
+    // println(b);
+// }
+
+fn @pow_(x : int, n: int) -> int {
+    match n {
+        0 => 1,
+        1 => x,
+        _ => x * pow_(x, n-1)
+    }
+}
+
