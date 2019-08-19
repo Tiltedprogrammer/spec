@@ -26,12 +26,13 @@ int main(int argc, char** argv) {
     std::string dummy_fun;
     //retrives value with key == 7
     dummy_fun += "extern fn dummy(vals : &[u8]) -> (){\n";
-    dummy_fun += "  let b = get42(Keys{array: \""+ c + "\"},vals,'7');\n";
+    //chage get42_cuda to get42 for cpu version
+    dummy_fun += "  let b = get42_cuda(Keys { array:\""+ c + "\"},vals,'7');\n";
     dummy_fun += "  print_char(b);";
     dummy_fun += "  print_string(\"\n\");}";
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
-    auto key = anydsl_compile(program.c_str(),program.size(),3);
+    auto key = anydsl_compile(program.c_str(),program.size(),0);
     typedef char (*function) (const char*);
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     call("abcdefghi");
