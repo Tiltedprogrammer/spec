@@ -1,9 +1,45 @@
 struct Keys{
     array : [u8 * 9],
 }
+struct Pattern {
+    array : [u8 * 10], //suppose we store the maximum possible pattern size
+    size : i32,
+}
 
 
-fn @get42(keys : Keys, values: &[u8], key: u8) -> u8 {
+//using unified memory for now, blocksize = 512;
+fn string_match(@pattern : Pattern, text : &[u8], text_size : i32, result_buf : &mut[i32], @block_size : i32 ) -> () {
+             let grid_size : i32 = (text_size + block_size - 1) / block_size;
+             print_i32(grid_size);
+             print_string("\n");
+             let block = (1, 1, 1);
+             let grid = (block_size, 1, 1);
+             
+             //single pattern for now
+             with cuda(0, grid, block) {
+                 // t_id is the position in text
+                //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
+                 let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+                 if t_id < text_size {
+                     let mut m = 0;
+
+                     for i in unroll(0, pattern.size) {
+                         //potential thread divergence
+                        if text(t_id + i) == pattern.array(i) {
+                            m = m + 1;
+                        }
+
+                     }
+                     if m == pattern.size {
+                        result_buf(t_id) = 1;
+                     }
+                 }
+             }
+             synchronize_cuda(0);
+             
+}
+
+fn get42(@keys : Keys, values: &[u8], @key: u8) -> u8 {
     
     let mut res = 0;
 
@@ -47,5 +83,3 @@ fn get42_cuda(keys : Keys, values: &[u8], key: u8) -> u8 {
     values(res)
 
 }
-
-
