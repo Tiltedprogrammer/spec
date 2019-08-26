@@ -1,13 +1,14 @@
 struct Keys{
     array : [u8 * 9],
+    size : i32,
 }
 struct Pattern {
-    array : [u8 * 10], //suppose we store the maximum possible pattern size
+    array : [u8 * 32], //suppose we store the maximum possible pattern size
     size : i32,
 }
 
 
-//using unified memory for now, blocksize = 512;
+//using unified memory for results_buf for now, blocksize = 32;
 fn string_match(@pattern : Pattern, text : &[u8], text_size : i32, result_buf : &mut[i32], @block_size : i32 ) -> () {
              let grid_size : i32 = (text_size + block_size - 1) / block_size;
              print_i32(grid_size);
@@ -15,12 +16,12 @@ fn string_match(@pattern : Pattern, text : &[u8], text_size : i32, result_buf : 
              let block = (1, 1, 1);
              let grid = (block_size, 1, 1);
              
-             //single pattern for now
+             //single pattern for now // patterns will be continious arrays of chars
              with cuda(0, grid, block) {
                  // t_id is the position in text
                 //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
                  let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
-                 if t_id < text_size {
+                 if t_id < text_size - pattern.size + 1 {
                      let mut m = 0;
 
                      for i in unroll(0, pattern.size) {
@@ -68,8 +69,13 @@ fn get42_cuda(keys : Keys, values: &[u8], key: u8) -> u8 {
     let mut res = 0;
     with cuda(device, grid, block){
 
-            unroll(0,9, |i| {
-                if keys.array(i) == key {// == key
+        let keys_shared = reserve_shared[u8](keys.size);
+        for i in unroll(0,keys.size) {
+            keys_shared(i) = keys.array(i);
+        }
+
+        unroll(0,keys.size, |i| {
+                if keys_shared(i) == key {// == key
                     buf_(0) = i;
                     // res = i;
 

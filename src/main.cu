@@ -14,8 +14,9 @@ void println(int a) {
 
 int main(int argc, char** argv) {
     
-    std::string pattern = "abcdefg00";
-    // pattern.resize(32);
+    std::string pattern = "abcdefg";
+
+    pattern.resize(31,'0');
     auto pattern_size = 7; 
         
     std::string dummy_fun;
@@ -40,7 +41,7 @@ int main(int argc, char** argv) {
     //think about data transfer;
     cudaMalloc((void**)&textptr, text_size + 1);
     cudaMemcpy((void*)textptr,text.c_str(),text_size + 1,cudaMemcpyHostToDevice);
-    cudaMallocManaged((void**)&result_buf, text_size);
+    cudaMallocManaged((void**)&result_buf, text_size * sizeof(int));
     
     cudaMemset((void*)result_buf, -1, text_size * sizeof(int));
     for (int i = 0; i < text_size; i++) {
