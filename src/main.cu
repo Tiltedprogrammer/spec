@@ -14,10 +14,19 @@ void println(int a) {
 
 int main(int argc, char** argv) {
     
-    std::string pattern = "abcdefga";
+    if (argc != 2 ) {
+        std::cout << "pattern string required\n";
+        return 0;
+    }
+    std::string pattern = std::string(argv[1]);
 
-    pattern.resize(31,'0');
-    auto pattern_size = 8; 
+    if (pattern.size() > 31) {
+        std::cout << "pattern should be less then or eq 31 bytes\n";
+        return 0;
+    }
+    auto pattern_size = pattern.size();
+    pattern.resize(31,'0'); 
+    std::cout << pattern_size << "\n";
         
     std::string dummy_fun;
 

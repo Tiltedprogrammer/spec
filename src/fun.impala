@@ -2,7 +2,7 @@ struct Keys{
     array : [u8 * 9],
     size : i32,
 }
-static array_size = 32 * 512;
+
 //multiple patterns?
 struct Templates {
     //16_384 to fit maximum possible size
@@ -20,11 +20,15 @@ struct Template {
     size : i32,
 }
 
+fn mod_length(head : i32, length : i32) -> i32 {
+    if head == length {1} else {head}
+}
 //single pattern :(
+    //add cuda
 fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
 
 
-    matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,0,0,0,0,0,0,0)
+    matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,0,0,0,0,0,0)
     
 }
 
@@ -37,88 +41,57 @@ fn matchf(template : Template,
           @chunk_size: i32,
           text_index : i32,
           template_index : i32,
-          t : i32,
           f : i32, //length of matched area
           ff : i32,
           headf : i32,
           headff : i32 ) -> (){
              
-             compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,0,f,ff,headf,headff)
+             compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,f,ff,headf,headff)
          }
-fn compare(template : Template, 
-         maximalPatternSize: i8,  
+fn compare(@template : Template, 
+         @maximalPatternSize: i8,  
          ibuffer : &[u8], 
          ibuffer_size : i32, 
          result_buf : &mut[i32], 
-         block_size : i32, 
-         chunk_size: i32,
+         @block_size : i32, 
+         @chunk_size: i32,
          text_index : i32,
          template_index : i32,
-         t : i32,
          f : i32, //length of matched area
-         ff : i32,
+         ff : i32, //remembers that we have already matched region
          headf : i32,
          headff : i32) -> () {
 
              if template_index == template.size {
                 result_buf(text_index - template.size) = 1; //text index or i?
-                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,0,ff,ff,headff+1,headff+1)
+                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,mod_length(headff+1,template.size),mod_length(headff+1,template.size)) //??
              } else {
-                if f == headf {
+                if f == 0 { //suffix found
                     if text_index == ibuffer_size {
                         return()
                     } else {
                         if ibuffer(text_index) == template.array(template_index) {
-                            compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index+1,t,f,ff+1,headf,headff)
+                            compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headf,headff)//?
                         } else {
-                            if ff == headff {//no common prefix 
-                                matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,f,ff,headf,headff)
+                            if ff == 0 {//no common prefix 
+                                matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0,0)//move f ff heads
                             }else { // match with prefix, i.e. f
-                                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index,0,ff,ff,headf + 1,headff +1)
+                                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,mod_length(headff+1,template.size),mod_length(headff+1,template.size))//??
                             }
                     }
                 }
                 }else { //f is length of matched area
-                     if template.array(t) == template.array(template.size - (f - headf) + t) {
-                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index,t+1,f,ff,headf+1,headff) //f?
+                     if template.array(template_index) == template.array(headf + template_index) {
+                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headf,headff) //f?
                     } else {// move head of matched area
-                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index,0,f,ff,headff+1,headff+1)
+                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,f-1,ff-1,headff+1,headff+1)
                     }
                 }
              }
-            //  if ibuffer(text_index) == template.array(template_index) {
-                //  matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index + 1,template_index + 1)
-            //  } else {
-                //  let r = rematch(template,template_index);
-                //  if r == -1 {
-                    //  matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0)
-                //  } else {
-                    //  compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,r)
-                //  }
-            //  }
          }
 
-fn rematch(template : Template, i : i32) -> i32{
-    
-    fn try(jp:i32, kp:i32) -> i32 {
-            if kp == i {//where missmatch happened
-                jp //longest prefix-suffix
-            }else {
-                if template.array(kp) == template.array(jp) {
-                    try(jp+1,kp+1)
-                }else {
-                    try(0,kp-jp + 1)
-                }
-            }
-    }
 
-    if i == 0 {
-        -1
-    }else {
-        try(0,1)   
-    }
-}
-
+//naive straightforward
 //using unified memory for results_buf for now, blocksize = 512;
 //each thread proccesses area of chunk_size size;
 fn string_match(@templates : Templates, @maximalPatternSize: i8 ,ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32 ) -> () {
@@ -188,54 +161,4 @@ fn string_match(@templates : Templates, @maximalPatternSize: i8 ,ibuffer : &[u8]
              }
              synchronize_cuda(0);
              
-}
-
-fn get42(@keys : Keys, values: &[u8], @key: u8) -> u8 {
-    
-    let mut res = 0;
-
-    //swap unroll for range to see the defference
-    unroll(0,9, |i| {
-            
-            if keys.array(i) == key {// == key
-                    res = i;
-
-    }
-            });
-
-    values(res)
-    
-
-}
-
-fn get42_cuda(keys : Keys, values: &[u8], key: u8) -> u8 {
-
-    let grid   = (1, 1, 1);
-    let block  = (1, 1, 1);
-    let device = 0;
-    let buf = alloc_cuda_unified(0,sizeof[int]());
-    let buf_ = bitcast[&mut[i32 * 1]](buf.data);
-    buf_(0) = 0;
-    let mut res = 0;
-    with cuda(device, grid, block){
-
-        let keys_shared = reserve_shared[u8](keys.size);
-        for i in unroll(0,keys.size) {
-            keys_shared(i) = keys.array(i);
-        }
-
-        unroll(0,keys.size, |i| {
-                if keys_shared(i) == key {// == key
-                    buf_(0) = i;
-                    // res = i;
-
-                }
-            });
-        }
-
-    synchronize_cuda(device);
-    res = buf_(0);
-    release(buf);
-    values(res)
-
 }
