@@ -20,3 +20,21 @@ extern fn r_no(x : i32) -> i32 {
     else {13};
     v + 7
 }
+
+fn pow(@(?x) x: int, n:int) -> i32{
+    if n == 0 {1} else {
+        x * pow(x,n - 1)
+    }
+}
+
+extern fn get_32(x : int) -> i32 {
+    ife()
+
+}
+
+fn ife() -> i32 {
+    if 2==3 {4}
+    else if 4==3 {3}
+    else if 2 == 2 {0}
+    else {12}
+}

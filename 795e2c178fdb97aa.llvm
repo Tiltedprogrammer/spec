@@ -1,0 +1,247 @@
+; ModuleID = 'jit'
+source_filename = "jit"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+@_12736 = internal global [32 x i8] c"ababa00000000000000000000000000\00"
+
+define void @dummy([0 x i8]* %text_12656, i32 %text_size_12657, [0 x i32]* %result_buf_12658) {
+dummy_start:
+  br label %dummy
+
+dummy:                                            ; preds = %dummy_start
+  br label %matchf
+
+matchf:                                           ; preds = %expr_true61, %expr_true16, %dummy
+  %ibuffer = phi [0 x i8]* [ %ibuffer29, %expr_true61 ], [ %ibuffer1, %expr_true16 ], [ %text_12656, %dummy ]
+  %ibuffer_size = phi i32 [ %ibuffer_size30, %expr_true61 ], [ %ibuffer_size2, %expr_true16 ], [ %text_size_12657, %dummy ]
+  %result_buf = phi [0 x i32]* [ %result_buf31, %expr_true61 ], [ %result_buf3, %expr_true16 ], [ %result_buf_12658, %dummy ]
+  %text_index = phi i32 [ %30, %expr_true61 ], [ %4, %expr_true16 ], [ 0, %dummy ]
+  %ff = phi i32 [ 0, %expr_true61 ], [ 0, %expr_true16 ], [ 0, %dummy ]
+  %headf = phi i32 [ 0, %expr_true61 ], [ 0, %expr_true16 ], [ 0, %dummy ]
+  %headff = phi i32 [ 0, %expr_true61 ], [ 0, %expr_true16 ], [ 0, %dummy ]
+  br label %compare
+
+compare:                                          ; preds = %expr_true17, %matchf
+  %ibuffer1 = phi [0 x i8]* [ %ibuffer1, %expr_true17 ], [ %ibuffer, %matchf ]
+  %ibuffer_size2 = phi i32 [ %ibuffer_size2, %expr_true17 ], [ %ibuffer_size, %matchf ]
+  %result_buf3 = phi [0 x i32]* [ %result_buf3, %expr_true17 ], [ %result_buf, %matchf ]
+  %text_index4 = phi i32 [ %4, %expr_true17 ], [ %text_index, %matchf ]
+  %template_index = phi i32 [ %11, %expr_true17 ], [ 0, %matchf ]
+  %ff5 = phi i32 [ %12, %expr_true17 ], [ %ff, %matchf ]
+  %headf6 = phi i32 [ %headf6, %expr_true17 ], [ %headf, %matchf ]
+  %headff7 = phi i32 [ %headff7, %expr_true17 ], [ %headff, %matchf ]
+  %0 = sub nsw i32 %ff5, 1
+  %1 = icmp eq i32 %template_index, 5
+  %2 = icmp eq i32 %ff5, 1
+  br i1 %1, label %expr_true19, label %expr_false
+
+expr_false:                                       ; preds = %compare
+  %3 = icmp eq i32 %text_index4, %ibuffer_size2
+  br i1 %3, label %expr_true18, label %expr_false8
+
+expr_false8:                                      ; preds = %expr_false
+  %4 = add nsw i32 1, %text_index4
+  %5 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer1, i64 0, i32 %text_index4
+  %6 = getelementptr inbounds [32 x i8], [32 x i8]* @_12736, i64 0, i32 %template_index
+  %7 = load i8, i8* %6
+  %8 = load i8, i8* %5, align 1
+  %9 = icmp eq i8 %8, %7
+  br i1 %9, label %expr_true17, label %expr_false9
+
+expr_false9:                                      ; preds = %expr_false8
+  %10 = icmp eq i32 %ff5, 0
+  br i1 %10, label %expr_true16, label %expr_false10
+
+expr_false10:                                     ; preds = %expr_false9
+  br i1 %2, label %expr_true, label %expr_false11
+
+expr_false11:                                     ; preds = %expr_false10
+  br label %move_head_cont
+
+expr_true:                                        ; preds = %expr_false10
+  br label %move_head_cont
+
+move_head_cont:                                   ; preds = %expr_true, %expr_false11
+  %move_head = phi i32 [ 0, %expr_true ], [ 1, %expr_false11 ]
+  br i1 %2, label %expr_true13, label %expr_false12
+
+expr_false12:                                     ; preds = %move_head_cont
+  br label %move_head_cont14
+
+expr_true13:                                      ; preds = %move_head_cont
+  br label %move_head_cont14
+
+move_head_cont14:                                 ; preds = %expr_true13, %expr_false12
+  %move_head15 = phi i32 [ 0, %expr_true13 ], [ 1, %expr_false12 ]
+  br label %compare28
+
+expr_true16:                                      ; preds = %expr_false9
+  br label %matchf
+
+expr_true17:                                      ; preds = %expr_false8
+  %11 = add nsw i32 1, %template_index
+  %12 = add nsw i32 1, %ff5
+  br label %compare
+
+expr_true18:                                      ; preds = %expr_false
+  ret void
+
+expr_true19:                                      ; preds = %compare
+  %13 = add nsw i32 1, %headff7
+  %14 = sub nsw i32 %text_index4, 5
+  %15 = getelementptr inbounds [0 x i32], [0 x i32]* %result_buf3, i64 0, i32 %14
+  store i32 1, i32* %15, align 4
+  br i1 %2, label %expr_true21, label %expr_false20
+
+expr_false20:                                     ; preds = %expr_true19
+  br label %move_head_cont22
+
+expr_true21:                                      ; preds = %expr_true19
+  br label %move_head_cont22
+
+move_head_cont22:                                 ; preds = %expr_true21, %expr_false20
+  %move_head23 = phi i32 [ 0, %expr_true21 ], [ %13, %expr_false20 ]
+  br i1 %2, label %expr_true25, label %expr_false24
+
+expr_false24:                                     ; preds = %move_head_cont22
+  br label %move_head_cont26
+
+expr_true25:                                      ; preds = %move_head_cont22
+  br label %move_head_cont26
+
+move_head_cont26:                                 ; preds = %expr_true25, %expr_false24
+  %move_head27 = phi i32 [ 0, %expr_true25 ], [ %13, %expr_false24 ]
+  br label %compare28
+
+compare28:                                        ; preds = %move_head_cont71, %expr_true62, %move_head_cont59, %expr_true48, %move_head_cont46, %move_head_cont26, %move_head_cont14
+  %ibuffer29 = phi [0 x i8]* [ %ibuffer29, %move_head_cont59 ], [ %ibuffer29, %expr_true48 ], [ %ibuffer1, %move_head_cont14 ], [ %ibuffer29, %expr_true62 ], [ %ibuffer29, %move_head_cont71 ], [ %ibuffer29, %move_head_cont46 ], [ %ibuffer1, %move_head_cont26 ]
+  %ibuffer_size30 = phi i32 [ %ibuffer_size30, %move_head_cont59 ], [ %ibuffer_size30, %expr_true48 ], [ %ibuffer_size2, %move_head_cont14 ], [ %ibuffer_size30, %expr_true62 ], [ %ibuffer_size30, %move_head_cont71 ], [ %ibuffer_size30, %move_head_cont46 ], [ %ibuffer_size2, %move_head_cont26 ]
+  %result_buf31 = phi [0 x i32]* [ %result_buf31, %move_head_cont59 ], [ %result_buf31, %expr_true48 ], [ %result_buf3, %move_head_cont14 ], [ %result_buf31, %expr_true62 ], [ %result_buf31, %move_head_cont71 ], [ %result_buf31, %move_head_cont46 ], [ %result_buf3, %move_head_cont26 ]
+  %text_index32 = phi i32 [ %text_index32, %move_head_cont59 ], [ %text_index32, %expr_true48 ], [ %text_index4, %move_head_cont14 ], [ %30, %expr_true62 ], [ %text_index32, %move_head_cont71 ], [ %text_index32, %move_head_cont46 ], [ %text_index4, %move_head_cont26 ]
+  %template_index33 = phi i32 [ 0, %move_head_cont59 ], [ %23, %expr_true48 ], [ 0, %move_head_cont14 ], [ %23, %expr_true62 ], [ 0, %move_head_cont71 ], [ 0, %move_head_cont46 ], [ 0, %move_head_cont26 ]
+  %f = phi i32 [ %19, %move_head_cont59 ], [ %28, %expr_true48 ], [ %0, %move_head_cont14 ], [ %f, %expr_true62 ], [ %19, %move_head_cont71 ], [ %19, %move_head_cont46 ], [ %0, %move_head_cont26 ]
+  %ff34 = phi i32 [ %19, %move_head_cont59 ], [ %ff34, %expr_true48 ], [ %0, %move_head_cont14 ], [ %35, %expr_true62 ], [ %19, %move_head_cont71 ], [ %19, %move_head_cont46 ], [ %0, %move_head_cont26 ]
+  %headf35 = phi i32 [ %move_head56, %move_head_cont59 ], [ %headf35, %expr_true48 ], [ %move_head, %move_head_cont14 ], [ %headf35, %expr_true62 ], [ %move_head68, %move_head_cont71 ], [ %move_head43, %move_head_cont46 ], [ %move_head23, %move_head_cont26 ]
+  %headff36 = phi i32 [ %move_head60, %move_head_cont59 ], [ %headff36, %expr_true48 ], [ %move_head15, %move_head_cont14 ], [ %headff36, %expr_true62 ], [ %move_head72, %move_head_cont71 ], [ %move_head47, %move_head_cont46 ], [ %move_head27, %move_head_cont26 ]
+  %16 = icmp eq i32 %ff34, 1
+  %17 = add nsw i32 1, %headff36
+  %18 = icmp eq i32 %template_index33, 5
+  %19 = sub nsw i32 %ff34, 1
+  br i1 %18, label %expr_true64, label %expr_false37
+
+expr_false37:                                     ; preds = %compare28
+  %20 = icmp eq i32 %f, 0
+  %21 = getelementptr inbounds [32 x i8], [32 x i8]* @_12736, i64 0, i32 %template_index33
+  %22 = load i8, i8* %21
+  %23 = add nsw i32 1, %template_index33
+  br i1 %20, label %expr_true49, label %expr_false38
+
+expr_false38:                                     ; preds = %expr_false37
+  %24 = add nsw i32 %headf35, %template_index33
+  %25 = getelementptr inbounds [32 x i8], [32 x i8]* @_12736, i64 0, i32 %24
+  %26 = load i8, i8* %25
+  %27 = icmp eq i8 %22, %26
+  br i1 %27, label %expr_true48, label %expr_false39
+
+expr_false39:                                     ; preds = %expr_false38
+  br i1 %16, label %expr_true41, label %expr_false40
+
+expr_false40:                                     ; preds = %expr_false39
+  br label %move_head_cont42
+
+expr_true41:                                      ; preds = %expr_false39
+  br label %move_head_cont42
+
+move_head_cont42:                                 ; preds = %expr_true41, %expr_false40
+  %move_head43 = phi i32 [ 0, %expr_true41 ], [ %17, %expr_false40 ]
+  br i1 %16, label %expr_true45, label %expr_false44
+
+expr_false44:                                     ; preds = %move_head_cont42
+  br label %move_head_cont46
+
+expr_true45:                                      ; preds = %move_head_cont42
+  br label %move_head_cont46
+
+move_head_cont46:                                 ; preds = %expr_true45, %expr_false44
+  %move_head47 = phi i32 [ 0, %expr_true45 ], [ %17, %expr_false44 ]
+  br label %compare28
+
+expr_true48:                                      ; preds = %expr_false38
+  %28 = sub nsw i32 %f, 1
+  br label %compare28
+
+expr_true49:                                      ; preds = %expr_false37
+  %29 = icmp eq i32 %text_index32, %ibuffer_size30
+  br i1 %29, label %expr_true63, label %expr_false50
+
+expr_false50:                                     ; preds = %expr_true49
+  %30 = add nsw i32 1, %text_index32
+  %31 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer29, i64 0, i32 %text_index32
+  %32 = load i8, i8* %31, align 1
+  %33 = icmp eq i8 %32, %22
+  br i1 %33, label %expr_true62, label %expr_false51
+
+expr_false51:                                     ; preds = %expr_false50
+  %34 = icmp eq i32 %ff34, 0
+  br i1 %34, label %expr_true61, label %expr_false52
+
+expr_false52:                                     ; preds = %expr_false51
+  br i1 %16, label %expr_true54, label %expr_false53
+
+expr_false53:                                     ; preds = %expr_false52
+  br label %move_head_cont55
+
+expr_true54:                                      ; preds = %expr_false52
+  br label %move_head_cont55
+
+move_head_cont55:                                 ; preds = %expr_true54, %expr_false53
+  %move_head56 = phi i32 [ 0, %expr_true54 ], [ 1, %expr_false53 ]
+  br i1 %16, label %expr_true58, label %expr_false57
+
+expr_false57:                                     ; preds = %move_head_cont55
+  br label %move_head_cont59
+
+expr_true58:                                      ; preds = %move_head_cont55
+  br label %move_head_cont59
+
+move_head_cont59:                                 ; preds = %expr_true58, %expr_false57
+  %move_head60 = phi i32 [ 0, %expr_true58 ], [ 1, %expr_false57 ]
+  br label %compare28
+
+expr_true61:                                      ; preds = %expr_false51
+  br label %matchf
+
+expr_true62:                                      ; preds = %expr_false50
+  %35 = add nsw i32 1, %ff34
+  br label %compare28
+
+expr_true63:                                      ; preds = %expr_true49
+  ret void
+
+expr_true64:                                      ; preds = %compare28
+  %36 = sub nsw i32 %text_index32, 5
+  %37 = getelementptr inbounds [0 x i32], [0 x i32]* %result_buf31, i64 0, i32 %36
+  store i32 1, i32* %37, align 4
+  br i1 %16, label %expr_true66, label %expr_false65
+
+expr_false65:                                     ; preds = %expr_true64
+  br label %move_head_cont67
+
+expr_true66:                                      ; preds = %expr_true64
+  br label %move_head_cont67
+
+move_head_cont67:                                 ; preds = %expr_true66, %expr_false65
+  %move_head68 = phi i32 [ 0, %expr_true66 ], [ %17, %expr_false65 ]
+  br i1 %16, label %expr_true70, label %expr_false69
+
+expr_false69:                                     ; preds = %move_head_cont67
+  br label %move_head_cont71
+
+expr_true70:                                      ; preds = %move_head_cont67
+  br label %move_head_cont71
+
+move_head_cont71:                                 ; preds = %expr_true70, %expr_false69
+  %move_head72 = phi i32 [ 0, %expr_true70 ], [ %17, %expr_false69 ]
+  br label %compare28
+}

@@ -32,7 +32,7 @@ fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer
     
 }
 
-fn move_head(ff: i32, head :i32) -> i32 {
+fn @(?ff & ?head)move_head(ff: i32, head :i32) -> i32 {
     if ff == 1 {
         0
     } else {
@@ -49,7 +49,7 @@ fn matchf(template : Template,
           @chunk_size: i32,
           text_index : i32,
           template_index : i32,
-          f : i32, //length of matched area
+          @(?f)f : i32, //length of matched area
           ff : i32,
           headf : i32,
           headff : i32 ) -> (){
@@ -65,39 +65,32 @@ fn compare(@template : Template,
          @chunk_size: i32,
          text_index : i32,
          template_index : i32,
-         f : i32, //length of matched area
+         @(?f)f : i32, //length of matched area
          ff : i32, //remembers that we have already matched region
          headf : i32,
          headff : i32) -> () {
 
-            //dynamic
+
              if template_index == template.size {
                 result_buf(text_index - template.size) = 1; //text index or i?
                 compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,headff+1),move_head(ff,headff+1))
-             } else {
-                if f == 0 { //suffix found
+             }else if f == 0{
+                //suffix found
                     if text_index == ibuffer_size {
                         return()
-                    } else {
-                        if ibuffer(text_index) == template.array(template_index) {
+                    }else if ibuffer(text_index) == template.array(template_index) {
                             compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headf,headff)//?
-                        } else {
-                            if ff == 0 {//no common prefix 
+                    }else if ff == 0 {//no common prefix 
                                 matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0,0)
-                            }else { // match with prefix, i.e. ff
+                    }else { // match with prefix, i.e. ff
                                 compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,1),move_head(ff,1))//?
-                            }
-                    }
-                }
-                }else { //f is length of matched area
-
-                     if template.array(template_index) == template.array(headf + template_index) {
+                     }
+                //f is the length of matched are
+             }else if template.array(template_index) == template.array(headf + template_index) {
                          compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headf,headff) //f?
-                    } else {// move head of matched area
-                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,headff+1),move_head(ff,headff+1))
-                    }
-                }
-             }
+             }else {// move head of matched area
+                      compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,headff+1),move_head(ff,headff+1))
+              }
          }
 
 
