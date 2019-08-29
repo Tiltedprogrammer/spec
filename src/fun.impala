@@ -64,7 +64,7 @@ fn compare(@template : Template,
 
              if template_index == template.size {
                 result_buf(text_index - template.size) = 1; //text index or i?
-                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,mod_length(headff+1,template.size),mod_length(headff+1,template.size)) //??
+                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1,headff+1)
              } else {
                 if f == 0 { //suffix found
                     if text_index == ibuffer_size {
@@ -74,9 +74,9 @@ fn compare(@template : Template,
                             compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headf,headff)//?
                         } else {
                             if ff == 0 {//no common prefix 
-                                matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0,0)//move f ff heads
-                            }else { // match with prefix, i.e. f
-                                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,mod_length(headff+1,template.size),mod_length(headff+1,template.size))//??
+                                matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0,0)
+                            }else { // match with prefix, i.e. ff
+                                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,1,1)//?
                             }
                     }
                 }
