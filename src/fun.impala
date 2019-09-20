@@ -3,6 +3,7 @@ struct Keys{
     size : i32,
 }
 
+
 //multiple patterns?
 struct Templates {
     //16_384 to fit maximum possible size
@@ -25,7 +26,7 @@ struct Template {
 fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
 
 
-    matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,0,0,0,0,0)
+    matchf(template,template.size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,0,0,0,0,0)
     
 }
 
@@ -38,6 +39,7 @@ fn @move_head(ff: i32, head :i32) -> i32 {
 }
 
 fn matchf(@template : Template,
+          @template_size : i32,
           @maximalPatternSize: i8,  
           ibuffer : &[u8], 
           @ibuffer_size : i32, 
@@ -50,41 +52,57 @@ fn matchf(@template : Template,
           @ff : i32,
           @headff : i32 ) -> (){
              
-            compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,f,ff,headff)
+            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,f,ff,headff)
          }
-fn compare(@template : Template,
-         @maximalPatternSize: i8,  
+fn compare(@(template_size > 1)template : Template,
+         @template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
+         @(template_size > 1)maximalPatternSize: i8,  
          ibuffer : &[u8], 
          ibuffer_size : i32, 
          result_buf : &mut[i32], 
-         @block_size : i32, 
-         @chunk_size: i32,
+         @(template_size > 1)block_size : i32, 
+         @(template_size > 1)chunk_size: i32,
          text_index : i32,
-         @template_index : i32,
-         @f : i32, //length of matched area
-         @ff : i32, //remembers that we have already matched region
-         @headff : i32) -> () {
+         @(template_size > 1)template_index : i32,
+         @(template_size > 1)f : i32, //length of matched area
+         @(template_size > 1)ff : i32, //remembers that we have already matched region
+         @(template_size > 1)headff : i32) -> () {
 
+
+             result_buf(text_index) = -1;
 
              if template_index == template.size {
                 result_buf(text_index - template.size) = 1; //text index or i?
-                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,headff+1))
+                compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
              }else if f == 0{
                 //suffix found
+                //if f == 0 & ff != 0 we can match agains negative information
                     if text_index == ibuffer_size {
                         return()
                     }else if ibuffer(text_index) == template.array(template_index) {
-                            compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)//?
+                        if ff == 0 {
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
+                        }else{
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,0)
+                        }
                     }else if ff == 0 {//no common prefix 
-                                matchf(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
+                                matchf(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
                     }else { // match with prefix, i.e. ff
-                                compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,1))//?
+                        if ff == 1 {
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,0)//?
+                        }else{
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,1)//? execution doesnt go there if pattern size is 1, but specializer fails
+                        }
                      }
                 //f is the length of matched are
              }else if template.array(template_index) == template.array(headff + template_index) { //static part
-                         compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff) //f?
+                         if f == 1 && ff != 0 && template.array(template_index+1) == template.array(headff + ff){
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
+                         }else {
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
+                         } //f?
              }else {// move head of matched area
-                      compare(template,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,move_head(ff,headff+1))
+                      compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
               }
          }
 
@@ -92,70 +110,40 @@ fn compare(@template : Template,
 //naive straightforward
 //using unified memory for results_buf for now, blocksize = 512;
 //each thread proccesses area of chunk_size size;
-fn string_match(@templates : Templates, @maximalPatternSize: i8 ,ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32 ) -> () {
+fn string_match(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32 ) -> () {
              //should probably padd ibuffer up to multiple of 512
              // kernel start will throw an error if grid_size is not multiple of block_size
-             let grid_size : i32 = (ibuffer_size + block_size - 1) / block_size;
-             print_i32(grid_size);
-             print_string("\n");
-             let block = (block_size, 1, 1);
-             let grid = (grid_size, 1, 1);
+            //  let mut block_size = 1024;
+            //  let mut grid_size : i32 = (ibuffer_size + block_size - 1) / block_size;
+            //  while (grid_size % block_size != 0) {
+                //  block_size = block_size / 2;
+                //  grid_size = (ibuffer_size + block_size - 1) / block_size;
+            //  }
+             let block = (2, 1, 1);
+             
+             let grid = (6, 1, 1);
              
              //single pattern for now // patterns will be continious arrays of chars
              with cuda(0, grid, block) {
                  // t_id is the position in the buffer
                 //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
-                 let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x(); //dynamic :(
-                 let _start = t_id * chunk_size;
-                 let _end = if _start + chunk_size < ibuffer_size {_start + chunk_size} else {ibuffer_size};
+                let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x(); //dynamic :(
+                if t_id < ibuffer_size {
+                    let mut matched : i8 = 1i8;
+                    result_buf(t_id) = -1;
 
-
-                 for n in range(_start,_end) {
+                    for i in unroll(0,template.size){
+                        if ibuffer(t_id + i) != template.array(i) {
+                            matched = -1i8;
+                        }
+                    }
+                    if matched == 1i8 {
+                        result_buf(t_id) = 1;
+                    }
                      
-                     let mut template_base = 0;
 
-                     for i in unroll(0,templates.size) {
-
-                         if i > 0 {template_base = template_base + (templates.lengths(i-1) as i32)}; 
-
-                         let cur_length :i32 = templates.lengths(n) as i32;
-                         //get rid of this if
-                         if (n + cur_length) <= ibuffer_size {
-                             let mut matches = 1;
-                             let mut j = 0;
-
-                             while matches == 1 && j < cur_length {
-
-                                // think about an alternative to chunk, i.e. need to test 2 alternatives
-                                // with consequtive threads access and with chunks, calculate sizes;
-                                 if ibuffer(n + j) != templates.array(template_base + j) {
-                                     matches = 0;
-                                 }
-
-                                 j = j + 1;
-                             }
-
-                             if matches == 1 {
-                                 result_buf(n) = i;
-                             }
-                         } 
-                     }
-
-                 }
-                //  if t_id < text_size - maximalPatternSize + 1 {
-                    //  let mut m = 0;
-
-                    //  for i in unroll(0, pattern.size) {
-                         //potential thread divergence
-                        // if text(t_id + i) == pattern.array(i) {
-                            // m = m + 1;
-                        // }
-
-                    //  }
-                    //  if m == pattern.size {
-                        // result_buf(t_id) = 1;
-                    //  }
-                //  }
+                }
+            
              }
              synchronize_cuda(0);
              

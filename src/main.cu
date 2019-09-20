@@ -7,17 +7,13 @@
 // Generated from fun.impala
 #include "fun.inc"
 
-void println(int a) {
-    printf("%i\n",a);
-}
-
 
 int main(int argc, char** argv) {
     
-    if (argc != 2 ) {
-        std::cout << "pattern string required\n";
-        return 0;
-    }
+    // if (argc != 2 ) {
+        // std::cout << "pattern string required\n";
+        // return 0;
+    // }
     std::string pattern = std::string(argv[1]);
 
     if (pattern.size() > 31) {
@@ -27,13 +23,14 @@ int main(int argc, char** argv) {
     auto pattern_size = pattern.size();
     pattern.resize(31,'0'); 
     std::cout << pattern_size << "\n";
+    std::cout << pattern << "\n";
         
     std::string dummy_fun;
 
     //maybe asyncronous read from disk and jit;
     dummy_fun += "extern fn dummy(text : &[u8], text_size : i32, result_buf : &mut[i32]) -> (){\n";
-    //chage get42_cuda to get42 for cpu version
-    dummy_fun += "  string_match_pseudoKMP(Template { array : \"" + pattern + "\", size : "
+    
+    dummy_fun += "  string_match(Template { array : \"" + pattern + "\", size : "
               + std::to_string(pattern_size) + "},32i8 ,text, text_size,result_buf,256,256)}"; //;
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
@@ -45,34 +42,33 @@ int main(int argc, char** argv) {
         return 0;
     }
     
-    std::string text;
-    std::cin >> text;
+    std::string text = std::string(argv[2]);
+    // std::cin >> text;
     auto text_size = text.length();
     int* result_buf = new int[text_size];
-    std::cout << "text length : " << text_size << "\n";
-    // const char* textptr = text.c_str();
+    int* dresult_buf;
+    char* dtext;
     //think about data transfer;
-    // cudaMalloc((void**)&textptr, text_size + 1);
-    // cudaMemcpy((void*)textptr,text.c_str(),text_size + 1,cudaMemcpyHostToDevice);
-    // cudaMallocManaged((void**)&result_buf, text_size * sizeof(int));
+    cudaMalloc((void**)&dtext, text_size * sizeof(char));
+    cudaMemcpy((void*)dtext,text.c_str(),text_size * sizeof(char),cudaMemcpyHostToDevice);
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     
-    for(int i = 0; i < text_size; i++) {
-        result_buf[i] = -1;
-    }
-    // cudaMemset((void*)result_buf, -1, text_size * sizeof(int));
-    for (int i = 0; i < text_size; i++) {
-        std::cout << result_buf[i];
-    }
-    std::cout << "\n";
+    // for(int i = 0; i < text_size; i++) {
+        // result_buf[i] = -1;
+    // }
+    // cudaMemset((void*)dresult_buf, -1, text_size*sizeof(int));
     
-    call(text.c_str(),text_size,result_buf);
+    // call(text.c_str(),text_size,result_buf);
+    call(dtext,text_size,dresult_buf);
+    cudaMemcpy((void*)result_buf,dresult_buf,text_size*sizeof(int),cudaMemcpyDeviceToHost);
 
     for (int i = 0; i < text_size; i++) {
         std::cout << result_buf[i];
     }
     std::cout << "\n";
     
-    // cudaFree(result_buf);
+    cudaFree(dresult_buf);
+    cudaFree(dtext);
     delete[] (result_buf);
 
     return 0;
