@@ -113,15 +113,12 @@ fn compare(@(template_size > 1)template : Template,
 fn string_match(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32 ) -> () {
              //should probably padd ibuffer up to multiple of 512
              // kernel start will throw an error if grid_size is not multiple of block_size
-            //  let mut block_size = 1024;
-            //  let mut grid_size : i32 = (ibuffer_size + block_size - 1) / block_size;
-            //  while (grid_size % block_size != 0) {
-                //  block_size = block_size / 2;
-                //  grid_size = (ibuffer_size + block_size - 1) / block_size;
-            //  }
-             let block = (2, 1, 1);
+             let mut block_size = 1024;
+             let mut grid_size : i32 = (ibuffer_size + block_size - 1) / block_size;
+            
+             let block = (block_size, 1, 1); // block is threads per block
              
-             let grid = (6, 1, 1);
+             let grid = (block_size * grid_size, 1, 1); //grid is the overall number of threads
              
              //single pattern for now // patterns will be continious arrays of chars
              with cuda(0, grid, block) {
