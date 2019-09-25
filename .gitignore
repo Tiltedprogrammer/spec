@@ -1,5 +1,8 @@
 .i*
 build*
 pe_*
+!subject.txt
 .out
 fo
+test*
+spec_space.code-workspace
