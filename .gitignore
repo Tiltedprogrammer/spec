@@ -1,7 +1,7 @@
 .i*
-build*
+/build/*
 pe_*
-!subject.txt
+!/build/src/data
 .out
 fo
 test*
