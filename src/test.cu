@@ -9,6 +9,11 @@
 #include <fstream>
 #include "timer.h"
 
+typedef struct Template{
+    char array[32] = {0};
+    int size;
+}Template;
+
 __global__ void match(char* pattern, int pattern_size, char* text, int text_size, int* result_buf) {
 
     int t_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -19,6 +24,27 @@ __global__ void match(char* pattern, int pattern_size, char* text, int text_size
 
         for(int i = 0; i < pattern_size; i++) {
             if(text[t_id + i] != pattern[i]) {
+                matched = -1;
+            }
+        }
+        if(matched == 1) {
+            result_buf[t_id] = 1;
+        }             
+                     
+
+    }
+}
+
+__global__ void match_struct(Template pattern, char* text, int text_size, int* result_buf) {
+
+    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(t_id < text_size){
+        int matched = 1;
+        result_buf[t_id] = -1;
+
+        for(int i = 0; i < pattern.size; i++) {
+            if(text[t_id + i] != pattern.array[i]) {
                 matched = -1;
             }
         }
@@ -48,11 +74,19 @@ int main(int argc, char** argv) {
     }
     auto pattern_size = pattern.size();
     pattern.resize(31,'0');
-    char* dpattern;
-    cudaMalloc((void**)&dpattern, pattern_size * sizeof(char));
-    cudaMemcpy((void*)dpattern,pattern.c_str(),pattern_size,cudaMemcpyHostToDevice); 
-    std::cout << pattern_size << "\n";
-    std::cout << pattern << "\n";
+    Template dpattern_s;
+    dpattern_s.size = pattern_size;
+    for(int i = 0; i < pattern_size; i++) {
+        dpattern_s.array[i] = pattern[i];
+    }
+    // char* dpattern;
+    // cudaMalloc((void**)&dpattern, pattern_size * sizeof(char));
+    // cudaMemcpy((void*)dpattern,pattern.c_str(),pattern_size,cudaMemcpyHostToDevice); 
+    std::cout << dpattern_s.size << "\n";
+    for(int i = 0; i < pattern_size; i++) {
+        std::cout << dpattern_s.array[i] << "\n";
+    }
+    // std::cout << dpatt << "\n";
 
     std::string subject_string_filename("data/subject.txt");
 
@@ -78,16 +112,6 @@ int main(int argc, char** argv) {
     delete[](subject_string);
     cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     
-    // for(int i = 0; i < text_size; i++) {
-        // result_buf[i] = -1;
-    // }
-    // cudaMemset((void*)dresult_buf, -1, text_size*sizeof(int));
-    // for (int i = 0; i < text_size; i++) {
-        // std::cout << result_buf[i];
-    // }
-    // std::cout << "\n";
-    
-    // call(text.c_str(),text_size,result_buf);
     dim3 block(1024);
     int grid_size = (text_size + block.x - 1) / block.x;
     dim3 grid(grid_size);
@@ -101,7 +125,8 @@ int main(int argc, char** argv) {
     am::timer time;
     time.start();
     // cudaEventRecord(start);
-    match<<<grid,block>>>(dpattern,pattern_size,textptr,text_size,dresult_buf);
+    match_struct<<<grid,block>>>(dpattern_s,textptr,text_size,dresult_buf);
+    // match<<<grid,block>>>(dpattern,pattern_size,textptr,text_size,dresult_buf);
     // cudaEventRecord(stop);
     cudaDeviceSynchronize();
     time.stop();
@@ -124,6 +149,7 @@ int main(int argc, char** argv) {
     
     cudaFree(dresult_buf);
     cudaFree(textptr);
+    // cudaFree(dpattern);
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     delete[] (result_buf);
