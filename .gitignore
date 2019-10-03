@@ -7,4 +7,4 @@ fo
 test/*.txt
 test/env*
 test/cache*
-spec_space.code-workspace
+*.code-workspace

@@ -27,7 +27,7 @@ fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer
 
 
     let block = (1024,1,1); //1024
-    let chunk = 4; //experiment with it
+    let chunk = 256; //experiment with it
     let grid_size : i32 = (ibuffer_size + block(0)*chunk - 1) / block(0)*chunk; //1 thread takes 256 byte piece 
     let grid = (grid_size * block(0),1,1);
     
@@ -138,6 +138,130 @@ fn compare(@(template_size > 1)template : Template,
                          } //f?
              }else {// move head of matched area
                       compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
+              }
+         }
+
+
+
+
+fn string_match_pseudoKMP_pointer(@templates : &[u8], @t_sizes: &[i32],@t_num :i32,@t_max:i32, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
+
+
+    let block = (1024,1,1); //1024 and 256 doesn't compile dunno why and produces strange results
+    let chunk = 256; //experiment with it ???
+    let grid_size : i32 = (ibuffer_size + block(0)*chunk - 1) / block(0)*chunk; //1 thread takes 256 byte piece 
+    let grid = (grid_size * block(0),1,1);
+    
+    with cuda(0,grid,block) {
+
+        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+
+        let left_bound = t_id * chunk;
+        let mut right_bound = left_bound + chunk + t_max-1; //right not included
+        
+        if right_bound >= ibuffer_size {
+            right_bound = ibuffer_size;
+        }
+
+        if left_bound < ibuffer_size {
+
+//for each pattern here
+            for i in unroll(0,t_num){
+            
+                matchfp(templates,
+                        t_size,
+                        t_offset,
+                        ibuffer,
+                        ibuffer_size,
+                        left_bound,
+                        right_bound,
+                        result_buf,
+                        block_size,
+                        chunk,
+                        left_bound,0,0,0,0); //text index
+
+            }
+                            
+        }
+
+        
+    }
+    // synchronize_cuda(0);
+    
+}
+
+fn matchfp(@(template_size > 1)template : &[u8],
+          @template_size : i32,  
+          ibuffer : &[u8], 
+          @ibuffer_size : i32, //right_bound if without annotation everything fails
+          left_bound : i32,
+          right_bound : i32,
+          result_buf : &mut[i32], 
+          block_size : i32, 
+          chunk_size: i32,
+          text_index : i32,//text_index
+          @template_index : i32,
+          @f : i32, //length of matched area
+          @ff : i32,
+          @headff : i32 ) -> (){
+             
+            comparep(template,template_size,ibuffer,right_bound,left_bound,right_bound,result_buf, block_size,chunk_size,text_index,0,f,ff,headff)
+     
+         }
+
+//TODO replace compare calls
+fn comparep(@(template_size > 1)template : &[u8],
+           @template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases  
+           ibuffer : &[u8], 
+           @ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
+           left_bound : i32,
+           right_bound : i32,
+           result_buf : &mut[i32], 
+           block_size : i32, 
+           chunk_size: i32,
+           text_index : i32,
+           @(template_size > 1)template_index : i32,
+           @(template_size > 1)f : i32, //length of matched area
+           @(template_size > 1)ff : i32, //remembers that we have already matched region
+           @(template_size > 1)headff : i32) -> () {
+
+
+             if(text_index < left_bound + chunk_size){
+                result_buf(text_index) = -1;
+             }
+                         
+             if template_index == template_size {
+                result_buf(text_index - template_size) = 1; //text index or i?
+                comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
+             }else if f == 0{
+                // suffix found
+                // if f == 0 & ff != 0 we can match against negative information
+                    if text_index == ibuffer_size {
+                        return()
+                    }else if ibuffer(text_index) == template(template_index) {
+                        if ff == 0 {
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
+                        }else{
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,0)
+                        }
+                    }else if ff == 0 {//no common prefix 
+                                matchfp(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
+                    }else { // match with prefix, i.e. ff
+                        if ff == 1 {
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,0)//?
+                        }else{
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,1)//? execution doesnt go there if pattern size is 1, but specializer fails
+                        }
+                     }
+                //f is the length of matched are
+             }else if template(template_index) == template(headff + template_index) { //static part
+                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
+                         }else {
+                            comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
+                         } //f?
+             }else {// move head of matched area
+                      comparep(template,template_size,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
               }
          }
 
