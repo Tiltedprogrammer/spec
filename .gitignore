@@ -2,7 +2,9 @@
 /build/*
 pe_*
 !/build/src/data
-.out
+*.out
 fo
-test*
+test/*.txt
+test/env*
+test/cache*
 spec_space.code-workspace
