@@ -24,16 +24,32 @@ struct Template {
 //single pattern :(
     //add cuda
 
-fn string_match_pseudoKMP_nochunk(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
+fn threadId() -> i64{
+    
+    let block_id : i64 = cuda_blockIdx_y() as i64 * cuda_gridDim_x() as i64 + cuda_blockIdx_x() as i64;
+
+    let t_id  : i64 = cuda_threadIdx_x() as i64  + cuda_blockDim_x() as i64 * block_id;
+
+    return(t_id)
+
+}
+
+fn string_match_pseudoKMP_nochunk(@template : &[u8], @template_size : i32, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32) -> (){
 
 
-    let block = (1024,1,1); //1024
-    let grid_size : i32 = (ibuffer_size + block(0) - 1) / block(0); //thread per symbol 
-    let grid = (grid_size * block(0),1,1);
+    let block = (block_size,1,1); //1024
+    let math = cpu_intrinsics;
+                //can be p'ed;
+    let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+    let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+    let grid = (g * block(0),g*block(0),1);
+    
+    // let grid_size : i64 = (ibuffer_size + block(0) - 1) / block(0); //thread per symbol 
+    // let grid = (grid_size * block(0),1,1);
     
     with cuda(0,grid,block) {
 
-        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+        let t_id :i64 = threadId();
         
         
 
@@ -41,7 +57,7 @@ fn string_match_pseudoKMP_nochunk(@template : Template, @maximalPatternSize: i8,
 
 //for each pattern here
             matchfnc(template,
-                   template.size,
+                   template_size,
                    t_id,
                    maximalPatternSize,
                    ibuffer,
@@ -59,16 +75,16 @@ fn string_match_pseudoKMP_nochunk(@template : Template, @maximalPatternSize: i8,
     
 }
 
-fn matchfnc(@(template_size > 1)template : Template,
+fn matchfnc(@(template_size > 1)template : &[u8],
           @template_size : i32,
-          t_id : i32,
+          t_id : i64,
           maximalPatternSize: i8,  
           ibuffer : &[u8], 
-          @ibuffer_size : i32, //right_bound if without annotation everything fails
-          result_buf : &mut[i32], 
+          @ibuffer_size : i64, //right_bound if without annotation everything fails
+          result_buf : &mut[u8], 
           block_size : i32, 
           chunk_size: i32,
-          text_index : i32,//text_index
+          text_index : i64,//text_index
           @template_index : i32,
           @f : i32, //length of matched area
           @ff : i32,
@@ -78,16 +94,16 @@ fn matchfnc(@(template_size > 1)template : Template,
          }
 
 //TODO replace compare calls
-fn comparenc(@(template_size > 1)template : Template,
+fn comparenc(@(template_size > 1)template : &[u8],
            @template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
-           t_id : i32,
+           t_id : i64,
            maximalPatternSize: i8,  
            ibuffer : &[u8], 
-           @ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
-           result_buf : &mut[i32], 
+           @ibuffer_size : i64, //right bound; if annotation here the PE aborts TODO: figure out why??!
+           result_buf : &mut[u8], 
            block_size : i32, 
            chunk_size: i32,
-           text_index : i32,
+           text_index : i64,
            @(template_size > 1)template_index : i32,
            @(template_size > 1)f : i32, //length of matched area
            @(template_size > 1)ff : i32, //remembers that we have already matched region
@@ -95,25 +111,25 @@ fn comparenc(@(template_size > 1)template : Template,
 
 
              
-             result_buf(t_id) = -1;
+             result_buf(t_id) = '0';
              
-             if template_index == template.size {
-                result_buf(t_id) = 1; //text index or i?
+             if template_index == template_size {
+                result_buf(t_id) = '1'; //text index or i?
                 // compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                 return()
              }else if f == 0{
                 //suffix found
                 //if f == 0 & ff != 0 we can match against negative information
-                    if text_index == t_id + template_size {
+                    if text_index == t_id + template_size as i64 { //running holds if add cond and template == aaab;
                         return()
-                    }else if ibuffer(text_index) == template.array(template_index) {
+                    }else if ibuffer(text_index) == template(template_index) {
                         if ff == 0 {
-                            comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
+                            comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,headff)
                         }else{
-                            comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,0)
+                            comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,0)
                         }
                     }else if ff == 0 {//no common prefix 
-                                matchfnc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
+                                matchfnc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1i64,0,0,0,0)
                     }else { // match with prefix, i.e. ff
                         if ff == 1 {
                             comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,0)//?
@@ -122,8 +138,8 @@ fn comparenc(@(template_size > 1)template : Template,
                         }
                      }
                 //f is the length of matched are
-             }else if template.array(template_index) == template.array(headff + template_index) { //static part
-                         if f == 1 && ff != 0 && template.array(template_index+1) == template.array(headff + ff){
+             }else if template(template_index) == template(headff + template_index) { //static part
+                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
                             comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                          }else {
                             comparenc(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
@@ -134,20 +150,21 @@ fn comparenc(@(template_size > 1)template : Template,
          }
 
 
-fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
+fn string_match_pseudoKMP(@template : &[u8], @template_size : i32, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32) -> (){
 
-
-    let block = (1024,1,1); //1024
+    let math = cpu_intrinsics;
+    let block = (block_size,1,1); //1024
     let chunk = 256; //experiment with it if eq 4 compilation fails
-    let grid_size : i32 = (((ibuffer_size + chunk - 1) / chunk) + block(0) - 1) / block(0); //1 thread takes 256 byte piece 
-    let grid = (grid_size * block(0),1,1);
+    let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
+    let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+    let grid = (g * block(0),g*block(0),1);
     
     with cuda(0,grid,block) {
 
-        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+        let t_id :i64 = threadId();
 
-        let left_bound = t_id * chunk;
-        let mut right_bound = left_bound + chunk + template.size-1; //right not included
+        let left_bound :i64 = t_id * chunk as i64;
+        let mut right_bound :i64 = left_bound + chunk as i64 + template_size as i64 - 1i64; //right not included
         
         if right_bound >= ibuffer_size {
             right_bound = ibuffer_size;
@@ -157,7 +174,7 @@ fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer
 
 //for each pattern here
             matchf(template,
-                   template.size,
+                   template_size,
                    maximalPatternSize,
                    ibuffer,
                    ibuffer_size,
@@ -176,17 +193,17 @@ fn string_match_pseudoKMP(@template : Template, @maximalPatternSize: i8, ibuffer
     
 }
 
-fn matchf(@(template_size > 1)template : Template,
+fn matchf(@(template_size > 1)template : &[u8],
           @template_size : i32,
           maximalPatternSize: i8,  
           ibuffer : &[u8], 
-          @ibuffer_size : i32, //right_bound if without annotation everything fails
-          left_bound : i32,
-          right_bound : i32,
-          result_buf : &mut[i32], 
+          @ibuffer_size : i64, //right_bound if without annotation everything fails
+          left_bound : i64,
+          right_bound : i64,
+          result_buf : &mut[u8], 
           block_size : i32, 
           chunk_size: i32,
-          text_index : i32,//text_index
+          text_index : i64,//text_index
           @template_index : i32,
           @f : i32, //length of matched area
           @ff : i32,
@@ -196,43 +213,43 @@ fn matchf(@(template_size > 1)template : Template,
          }
 
 //TODO replace compare calls
-fn compare(@(template_size > 1)template : Template,
+fn compare(@(template_size > 1)template : &[u8],
            @template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
            maximalPatternSize: i8,  
            ibuffer : &[u8], 
-           @ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
-           left_bound : i32,
-           right_bound : i32,
-           result_buf : &mut[i32], 
+           @ibuffer_size : i64, //right bound; if annotation here the PE aborts TODO: figure out why??!
+           left_bound : i64,
+           right_bound : i64,
+           result_buf : &mut[u8], 
            block_size : i32, 
            chunk_size: i32,
-           text_index : i32,
+           text_index : i64,
            @(template_size > 1)template_index : i32,
            @(template_size > 1)f : i32, //length of matched area
            @(template_size > 1)ff : i32, //remembers that we have already matched region
            @(template_size > 1)headff : i32) -> () {
 
 
-             if(text_index < left_bound + chunk_size){
-                result_buf(text_index) = -1;
+             if(text_index < left_bound + chunk_size as i64){
+                result_buf(text_index) = '0';
              }
              
-             if template_index == template.size {
-                result_buf(text_index - template.size) = 1; //text index or i?
+             if template_index == template_size {
+                result_buf(text_index - template_size as i64) = '1'; //text index or i?
                 compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
              }else if f == 0{
                 //suffix found
                 //if f == 0 & ff != 0 we can match against negative information
-                    if text_index == ibuffer_size {
+                    if text_index == ibuffer_size { //it is right bound, thus ok;
                         return()
-                    }else if ibuffer(text_index) == template.array(template_index) {
+                    }else if ibuffer(text_index) == template(template_index) {
                         if ff == 0 {
-                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,headff)
                         }else{
-                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,0)
+                            compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,0)
                         }
                     }else if ff == 0 {//no common prefix 
-                                matchf(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
+                                matchf(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1i64,0,0,0,0)
                     }else { // match with prefix, i.e. ff
                         if ff == 1 {
                             compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,0)//?
@@ -241,135 +258,14 @@ fn compare(@(template_size > 1)template : Template,
                         }
                      }
                 //f is the length of matched are
-             }else if template.array(template_index) == template.array(headff + template_index) { //static part
-                         if f == 1 && ff != 0 && template.array(template_index+1) == template.array(headff + ff){
+             }else if template(template_index) == template(headff + template_index) { //static part
+                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
                             compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                          }else {
                             compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
                          } //f?
              }else {// move head of matched area
                       compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
-              }
-         }
-
-
-
-
-fn string_match_pseudoKMP_pointer(@template : &[u8],t_size : i32, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
-
-
-    let block = (1024,1,1); //1024
-    let chunk = 256; //experiment with it
-    let grid_size : i32 = (ibuffer_size + block(0)*chunk - 1) / block(0)*chunk; //1 thread takes 256 byte piece 
-    let grid = (grid_size * block(0),1,1);
-    
-    with cuda(0,grid,block) {
-
-        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
-
-        let left_bound = t_id * chunk;
-        let mut right_bound = left_bound + chunk + t_size-1; //right not included
-        
-        if right_bound >= ibuffer_size {
-            right_bound = ibuffer_size;
-        }
-
-        if left_bound < ibuffer_size {
-
-//for each pattern here
-            matchfps(template,
-                   t_size,
-                   maximalPatternSize,
-                   ibuffer,
-                   ibuffer_size,
-                   left_bound,
-                   right_bound,
-                   result_buf,
-                   block_size,
-                   chunk,
-                   left_bound,0,0,0,0); //text index
-
-        }
-
-        
-    }
-    // synchronize_cuda(0);
-    
-}
-
-fn matchfps(@(template_size > 1)template : &[u8],
-          @template_size : i32,
-          maximalPatternSize: i8,  
-          ibuffer : &[u8], 
-          @ibuffer_size : i32, //right_bound if without annotation everything fails
-          left_bound : i32,
-          right_bound : i32,
-          result_buf : &mut[i32], 
-          block_size : i32, 
-          chunk_size: i32,
-          text_index : i32,//text_index
-          @template_index : i32,
-          @f : i32, //length of matched area
-          @ff : i32,
-          @headff : i32 ) -> (){
-             
-            compareps(template,template_size,maximalPatternSize,ibuffer,right_bound,left_bound,right_bound,result_buf, block_size,chunk_size,text_index,0,f,ff,headff)
-         }
-
-//TODO replace compare calls
-fn compareps(@(template_size > 1)template : &[u8],
-           @template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
-           maximalPatternSize: i8,  
-           ibuffer : &[u8], 
-           @ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
-           left_bound : i32,
-           right_bound : i32,
-           result_buf : &mut[i32], 
-           block_size : i32, 
-           chunk_size: i32,
-           text_index : i32,
-           @(template_size > 1)template_index : i32,
-           @(template_size > 1)f : i32, //length of matched area
-           @(template_size > 1)ff : i32, //remembers that we have already matched region
-           @(template_size > 1)headff : i32) -> () {
-
-
-             if(text_index < left_bound + chunk_size){
-                result_buf(text_index) = -1;
-             }
-             
-             if template_index == template_size {
-                result_buf(text_index - template_size) = 1; //text index or i?
-                compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
-             }else if f == 0{
-                //suffix found
-                //if f == 0 & ff != 0 we can match against negative information
-                    if text_index == ibuffer_size {
-                        return()
-                    }else if ibuffer(text_index) == template(template_index) {
-                        if ff == 0 {
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
-                        }else{
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,0)
-                        }
-                    }else if ff == 0 {//no common prefix 
-                                matchfps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,0,0,0,0)
-                    }else { // match with prefix, i.e. ff
-                        if ff == 1 {
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,0)//?
-                        }else{
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,1)//? execution doesnt go there if pattern size is 1, but specializer fails
-                        }
-                     }
-                //f is the length of matched are
-             }else if template(template_index) == template(headff + template_index) { //static part
-                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
-                         }else {
-                            compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
-                         } //f?
-             }else {// move head of matched area
-                      compareps(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
               }
          }
 
@@ -501,36 +397,39 @@ fn comparep(@(template_size > 1)template : &[u8],
 //using unified memory for results_buf for now, blocksize = 512;
 //each thread proccesses area of chunk_size size;
 //template here should be in device memory or to be a struct;
-fn string_match(@template : Template, @template_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
+fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
              
             if nochunk == 1 {
 
-                let block = (1024,1,1);
-
-                let grid_size : i32 = (ibuffer_size + block(0) - 1) / block(0);
-            
-
-                let grid = (block(0) * grid_size, 1, 1); //grid is the overall number of threads;
+                let block = (block_size,1,1); //1024
+                let math = cpu_intrinsics;
+                //can be p'ed;
+                let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+                let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                let grid = (g * block(0),g*block(0),1); //grid is the overall number of threads;
              
                 
                 with cuda(0, grid, block) {
                     
-                    let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x(); //dynamic :(;
+                    let t_id :i64 = threadId();
                     
                     if t_id < ibuffer_size {
                         
                         let mut matched : i8 = 1i8;
-                        result_buf(t_id) = -1;
+                        result_buf(t_id) = '0';
 
-                        for i in unroll(0,template_size){
-                            if ibuffer(t_id + i) != template.array(i) {
-                                matched = -1i8;
-                                break()
-                            }
-                        }
+                        if(t_id < ibuffer_size - template_size as i64 + 1i64){
+
+                            for i in unroll(0,template_size){
+                                    if ibuffer(t_id + i as i64) != template(i) {
+                                        matched = -1i8;
+                                        break() //if return --- segfault
+                                    }
+                                }
                         
-                        if matched == 1i8 {
-                            result_buf(t_id) = 1;
+                                if matched == 1i8 {
+                                    result_buf(t_id) = '1';
+                                }
                         }
                      
 
@@ -538,30 +437,116 @@ fn string_match(@template : Template, @template_size: i32 ,@maximalPatternSize: 
                 }
              }else {
 
-                let block = (1024, 1, 1); // block is threads per block
-                let grid_size : i32 = (((ibuffer_size + chunk_size - 1) / chunk_size) + block(0) - 1) / block(0);
-             
-                let grid = (block(0) * grid_size, 1, 1); //grid is the overall number of threads
+                let math = cpu_intrinsics;
+                let block = (block_size,1,1); //1024
+                let chunk = 256; //experiment with it if eq 4 compilation fails
+                let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
+                let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                let grid = (g * block(0),g*block(0),1); //grid is the overall number of threads
              
                 //single pattern for now // patterns will be continious arrays of chars;
                 with cuda(0, grid, block) {
                     // t_id is the position in the buffer;
                     //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
-                    let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
-                    let left_bound = t_id * chunk_size; //dynamic :(
+                    let t_id :i64 = threadId();
+                    let left_bound :i64 = t_id * chunk_size as i64; //dynamic :(
                     if left_bound < ibuffer_size {
                         for i in range(0,chunk_size){
-                            result_buf(left_bound + i) = -1;
+                            result_buf(left_bound + i as i64) = '0';
                             let mut matched = 1;
+                            if(i as i64 < ibuffer_size - left_bound as i64 - template_size as i64 + 1i64) {
+                                for j in unroll(0,template_size) {
+                                    if ibuffer(left_bound + i as i64 + j as i64) != template(j){
+                                        matched = -1;
+                                        break()
+                                    }
+                                }
 
-                            for j in unroll(0,template_size) {
-                                if ibuffer(left_bound + i + j) != template.array(j){
-                                    matched = -1;
+                                if matched == 1 {
+                                    result_buf(left_bound + i as i64) = '1';
                                 }
                             }
 
-                            if matched == 1 {
-                                result_buf(left_bound+i) = 1;
+                        }
+                    }
+
+                }
+             }
+            //  synchronize_cuda(0);
+             
+}
+
+
+
+fn string_match_nope(@(false)template : &[u8], @(false)template_size: i32 ,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32, chunk_size: i32, nochunk : i32 ) -> () {
+             
+            if nochunk == 1 {
+                
+                let block = (block_size,1,1); //1024
+                let math = cpu_intrinsics;
+                //can be p'ed;
+                let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+                let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                let grid = (g * block(0),g*block(0),1); //grid is the overall number of threads;
+             
+                
+                with cuda(0, grid, block) {
+                    
+                    let t_id :i64 = threadId();
+                    
+                    if t_id < ibuffer_size {
+                        
+                        let mut matched : i8 = 1i8;
+                        result_buf(t_id) = '0';
+                        
+                        if(t_id < ibuffer_size - template_size as i64 + 1i64){
+                            for i in unroll(0,template_size){
+                                if ibuffer(t_id + i as i64) != template(i) {
+                                    matched = -1i8;
+                                    break()
+                                }
+                            }
+                        
+                            if matched == 1i8 {
+                                result_buf(t_id) = '1';
+                            }
+                        }
+                     
+
+                    }
+                }
+             }else {
+
+                let math = cpu_intrinsics;
+                let block = (block_size,1,1); //1024
+                let chunk = 256; //experiment with it if eq 4 compilation fails
+                let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
+                let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                let grid = (g * block(0),g*block(0),1);
+             
+                //single pattern for now // patterns will be continious arrays of chars;
+                with cuda(0, grid, block) {
+                    // t_id is the position in the buffer;
+                    //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
+                    let t_id :i64 = threadId();
+                    let left_bound :i64 = t_id * chunk_size as i64; //dynamic :(
+                    if left_bound < ibuffer_size {
+
+                        for i in range(0,chunk_size){
+                            result_buf(left_bound + i as i64) = '0';
+                            let mut matched = 1;
+
+                            if(i as i64 < ibuffer_size - left_bound as i64 - template_size as i64 + 1i64){
+                                for j in unroll(0,template_size) {
+                                    if ibuffer(left_bound + i as i64 + j as i64) != template(j){
+                                        matched = -1;
+                                        break()
+                                    }
+                                }
+
+                                if matched == 1 {
+                                    result_buf(left_bound + i as i64) = '1';
+                                }
                             }
 
                         }
@@ -581,45 +566,68 @@ fn string_match(@template : Template, @template_size: i32 ,@maximalPatternSize: 
                 //   | (s !! j == s !! jk) = (isPrefix s k (j+1) (jk+1))
                 //   | otherwise = False
 
+//TODO segfault??
 
-fn prefix_function(@template : &[u8], @index : i32) -> i32{  //pe here ok;
+//CPS
+fn prefix_function(template : &[u8],t_size : i32, text_index : i32,
+                     left_bound : i32, right_bound : i32, ibuffer : &[u8],result_buf:&mut[u8],
+                     chunk:i32,index : i32, k: i32, res:i32,
+                      cont: fn(&[u8],i32,i32,i32,i32,&[u8],&mut[u8],i32,i32)->()) -> (){  //pe here ok;
 
-    fn is_prefix(@k_: i32) -> bool {
+        fn is_prefix(@k_: i32, @i : i32) -> bool {
         
-        let mut isPrefix = true;
-        
-        for i in unroll(0,k_){
-            if template(i) != template(index - k_ + 1 + i) {
-                isPrefix = false;
+            // let mut isPrefix = true;
+            if(i < k_){
+                if template(i) != template(index - k_ + 1 + i){
+                    false
+                }else{
+                    is_prefix(k_, i + 1)
+                }
+            }else {
+                true
             }
+            // for i in unroll(0,k_){
+                // if template(i) != template(index - k_ + 1 + i) {
+                    // return(0)
+                // }
+            // }
+            // return(1);
         }
-        isPrefix
+
+        // let mut res = 0;
+        if k == index + 1{
+            $cont(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,res)
+        }else if is_prefix(k,0){
+            prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,k,cont)
+        }else{
+            prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,res,cont)
+        }
+        // for k in unroll(0,index + 1) {
+            // if is_prefix(k,0) {
+                // res = k;
+            // }
+        // }
+
+        // res
     }
 
-    let mut res = 0;
-    for k in unroll(0,index + 1) {
-        if is_prefix(k) {
-            res = k;
-        }
-    }
+fn match_kmp(@template : &[u8], @t_size: i32 ,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32, @chunk_size: i32, @nochunk : i32) -> (){
 
-    res
-}
-
-fn match_kmp(@template : &[u8], @t_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32, @nochunk : i32) -> (){
+    let math = cpu_intrinsics;
 
     if nochunk == 0 {
-        let block = (1024,1,1); //1024
-        let chunk = chunk_size; //experiment with it
-        let grid_size : i32 = (((ibuffer_size + chunk - 1) / chunk) + block(0) - 1) / block(0);
-        let grid = (grid_size * block(0),1,1);
+        let block = (block_size,1,1); //1024
+        let chunk = 256; //experiment with it if eq 4 compilation fails
+        let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
+        let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+        let grid = (g * block(0),g*block(0),1);
     
         with cuda(0,grid,block) {
 
-            let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+            let t_id :i64 = threadId();
 
-            let left_bound = t_id * chunk;
-            let mut right_bound = left_bound + chunk + t_size-1; //right not included
+            let left_bound :i64 = t_id * chunk as i64;
+            let mut right_bound :i64 = left_bound + chunk as i64 + t_size as i64 -1i64; //right not included
         
             if right_bound >= ibuffer_size {
                 right_bound = ibuffer_size;
@@ -627,27 +635,25 @@ fn match_kmp(@template : &[u8], @t_size: i32 ,@maximalPatternSize: i8, ibuffer :
 
             if left_bound < ibuffer_size {
 
-                kmp(template,t_size,left_bound,left_bound,right_bound,ibuffer,result_buf,chunk,0)
+                kmp(template,t_size,left_bound,left_bound,right_bound,ibuffer,ibuffer_size,result_buf,chunk,0)
             }
         }
     }else { //nochunk
 
-        let block = (1024,1,1);
-        let grid_size = (ibuffer_size + block(0) - 1) / block(0);
-        let grid = (grid_size * block(0),1,1);
+        let block = (block_size,1,1); //1024
+                //can be p'ed;
+        let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+        let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+        let grid = (g * block(0),g*block(0),1);
 
         with cuda(0,grid,block) {
 
-            let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+            let t_id :i64 = threadId();
 
             if t_id < ibuffer_size {
-                kmp_nc(template,t_size,t_id,ibuffer,result_buf)
+                kmp_nc(template,t_size,t_id,ibuffer,ibuffer_size,result_buf)
             }
         }
-
-
-
-
 
     }
 }
@@ -680,8 +686,59 @@ fn match_kmp(@template : &[u8], @t_size: i32 ,@maximalPatternSize: i8, ibuffer :
         
     // };
 
-fn kmp(@template : &[u8], @template_size: i32, text_index : i32, left_bound : i32, right_bound : i32, ibuffer : &[u8], result_buf : &mut[i32], @chunk_size : i32, @ams : i32) -> () {
+fn kmp(@template : &[u8], @template_size: i32, text_index : i64, left_bound : i64, right_bound : i64, ibuffer : &[u8],ibuffer_size : i64, result_buf : &mut[u8], @chunk_size : i32, @ams : i32) -> () {
     
+    // fn prefix_function(@index : i32) -> i32{  //pe here ok;
+
+        // fn is_prefix(@k_: i32, @i : i32) -> bool {
+        
+            // let mut isPrefix = true;
+            // if(i < k_){
+
+                // if template(i) != template(index - k_ + 1 + i){
+                    // false
+
+                // }else{
+                    // is_prefix(k_, i + 1)
+                // }
+            // }else {
+                // true
+            // }
+            // for i in unroll(0,k_){
+                // if template(i) != template(index - k_ + 1 + i) {
+                    // return(0)
+                // }
+            // }
+            // return(1);
+        // }
+
+
+        // let mut res = 0;
+            // for i in unroll(0,k_){
+        // for k in unroll(0,index + 1) {
+            // if is_prefix(k,0) {
+                // res = k;
+            // }
+        // }
+
+        // res
+    // }
+
+    // if text_index < right_bound {
+        // result_buf(text_index) = '0';
+    // }
+
+
+    // if(i < ibuffer_size - left_bound - template_size + 1){
+
+        // if ams == template_size{
+            // result_buf(text_index - template_size) = '1';
+        // }else if text_index == right_bound {
+            // return()
+        // }
+
+    // }
+
     fn prefix_function(@index : i32) -> i32{  //pe here ok;
 
         fn is_prefix(@k_: i32) -> bool {
@@ -706,35 +763,40 @@ fn kmp(@template : &[u8], @template_size: i32, text_index : i32, left_bound : i3
         res
     }
 
-    if text_index < left_bound + chunk_size {
-        result_buf(text_index) = -1;
-    }
+    let mut ams = 0; // ams;
 
 
-    if ams == template_size {
+    for i in range(0,chunk_size) {
         
-        result_buf(text_index - template_size) = 1;
-        kmp(template,template_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk_size, prefix_function(ams - 1))
-    
-    }else if text_index == right_bound {
-        return()
-    }else if ams > 0 && template(ams) != ibuffer(text_index){
-        kmp(template,template_size,text_index,left_bound,right_bound,ibuffer,result_buf, chunk_size, prefix_function(ams - 1))
-    }
+        if (left_bound + i as i64 < right_bound) {
 
-    else if template(ams) == ibuffer(text_index){
+            result_buf(left_bound + i as i64) = '0';
+
+        }else{
+            break()
+        }
+
+        while ams > 0 && template(ams) != ibuffer(i) { //missmatch at i pos;
+            ams = prefix_function(ams-1)
+        }
         
-        kmp(template,template_size,text_index + 1,left_bound,right_bound,ibuffer,result_buf,chunk_size,ams + 1)
-    
-    }else{
+        if ibuffer(i) == template(ams){
+            ams = ams + 1;
+        }
+
+        if ams == template_size {
+
+            result_buf(i as i64 - template_size as i64 + 1 as i64) = '1';
+            ams = prefix_function(ams-1);
         
-        kmp(template,template_size,text_index+1,left_bound,right_bound,ibuffer,result_buf,chunk_size, 0)
-    
+        }
+        
     }
+    
 
 }
 
-fn kmp_nc(@template : &[u8], @template_size: i32, @t_id : i32, ibuffer : &[u8], result_buf : &mut[i32]) -> (){
+fn kmp_nc(@template : &[u8], @template_size: i32, @t_id : i64, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8]) -> (){
     
     fn prefix_function(@index : i32) -> i32{  //pe here ok;
 
@@ -764,39 +826,42 @@ fn kmp_nc(@template : &[u8], @template_size: i32, @t_id : i32, ibuffer : &[u8], 
 
     for i in unroll(0,template_size) {
         
-        result_buf(t_id) = -1;
+        result_buf(t_id) = '0';
 
-        while ams > 0 && template(ams) != ibuffer(t_id+i) { //missmatch at i pos
-            ams = prefix_function(ams-1);
-        }
-        
-        if ibuffer(t_id + i) == template(ams){
-            ams = ams + 1;
-        }
+        if(t_id < ibuffer_size - template_size as i64 + 1i64){
 
-        if ams == template_size {
+            while ams > 0 && template(ams) != ibuffer(t_id + i as i64) { //missmatch at i pos
+                ams = prefix_function(ams-1);
+            }
+        
+            if ibuffer(t_id + i as i64) == template(ams){
+                ams = ams + 1;
+            }
 
-            result_buf(t_id) = 1;
-            ams = prefix_function(ams-1);
+            if ams == template_size {
+
+                result_buf(t_id) = '1';
+                ams = prefix_function(ams-1);
+        
+            }
         
         }
-        
     }
 
 }
 
 
+/*
+fn string_match_pseudoKMP_nochunk_nope(template : &[u8], t_size : i32,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32, chunk_size: i32) -> (){
 
-fn string_match_pseudoKMP_nochunk_nope(template : Template, maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i32, result_buf : &mut[i32], block_size : i32, chunk_size: i32) -> (){
 
-
-    let block = (1024,1,1); //1024
-    let grid_size : i32 = (ibuffer_size + block(0) - 1) / block(0); //thread per symbol 
+    let block = (block_size,1,1); //1024
+    let grid_size : i64 = (ibuffer_size + block(0) - 1) / block(0); //thread per symbol 
     let grid = (grid_size * block(0),1,1);
     
     with cuda(0,grid,block) {
 
-        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+        let t_id :i64 = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
         
         
 
@@ -804,7 +869,7 @@ fn string_match_pseudoKMP_nochunk_nope(template : Template, maximalPatternSize: 
 
 //for each pattern here
             matchfnc_no(template,
-                   template.size,
+                   t_size,
                    t_id,
                    maximalPatternSize,
                    ibuffer,
@@ -822,16 +887,16 @@ fn string_match_pseudoKMP_nochunk_nope(template : Template, maximalPatternSize: 
     
 }
 
-fn matchfnc_no(template : Template,
+fn matchfnc_no(template : &[u8],
           template_size : i32,
-          t_id : i32,
+          t_id : i64,
           maximalPatternSize: i8,  
           ibuffer : &[u8], 
-          ibuffer_size : i32, //right_bound if without annotation everything fails
-          result_buf : &mut[i32], 
+          ibuffer_size : i64, //right_bound if without annotation everything fails
+          result_buf : &mut[u8], 
           block_size : i32, 
           chunk_size: i32,
-          text_index : i32,//text_index
+          text_index : i64,//text_index
           template_index : i32,
           f : i32, //length of matched area
           ff : i32,
@@ -841,16 +906,16 @@ fn matchfnc_no(template : Template,
          }
 
 //TODO replace compare calls
-fn comparenc_no(template : Template,
+fn comparenc_no(template : &[u8],
            template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
-           t_id : i32,
+           t_id : i64,
            maximalPatternSize: i8,  
            ibuffer : &[u8], 
-           ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
-           result_buf : &mut[i32], 
+           ibuffer_size : i64, //right bound; if annotation here the PE aborts TODO: figure out why??!
+           result_buf : &mut[u8], 
            block_size : i32, 
            chunk_size: i32,
-           text_index : i32,
+           text_index : i64,
            template_index : i32,
            f : i32, //length of matched area
            ff : i32, //remembers that we have already matched region
@@ -858,18 +923,18 @@ fn comparenc_no(template : Template,
 
 
              
-             result_buf(t_id) = -1;
+             result_buf(t_id) = '0';
              
-             if template_index == template.size {
-                result_buf(t_id) = 1; //text index or i?
+             if template_index == template_size {
+                result_buf(t_id) = '1'; //text index or i?
                 // compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                 return()
              }else if f == 0{
                 //suffix found
                 //if f == 0 & ff != 0 we can match against negative information
-                    if text_index == t_id + template_size {
+                    if text_index == t_id + template_size || text_index == ibuffer_size {
                         return()
-                    }else if ibuffer(text_index) == template.array(template_index) {
+                    }else if ibuffer(text_index) == template(template_index) {
                         if ff == 0 {
                             comparenc_no(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
                         }else{
@@ -885,8 +950,8 @@ fn comparenc_no(template : Template,
                         }
                      }
                 //f is the length of matched are
-             }else if template.array(template_index) == template.array(headff + template_index) { //static part
-                         if f == 1 && ff != 0 && template.array(template_index+1) == template.array(headff + ff){
+             }else if template(template_index) == template(headff + template_index) { //static part
+                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
                             comparenc_no(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                          }else {
                             comparenc_no(template,template_size,t_id,maximalPatternSize,ibuffer,ibuffer_size,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
@@ -897,20 +962,20 @@ fn comparenc_no(template : Template,
          }
 
 
-fn string_match_pseudoKMP_nope(template : Template, maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i32, result_buf : &mut[i32], block_size : i32, chunk_size: i32) -> (){
+fn string_match_pseudoKMP_nope(template : &[u8],t_size : i64, maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32, chunk_size: i32) -> (){
 
 
-    let block = (1024,1,1); //1024
-    let chunk = 256; //experiment with it if eq 4 compilation fails
-    let grid_size : i32 = (((ibuffer_size + chunk - 1) / chunk) + block(0) - 1) / block(0); //1 thread takes 256 byte piece 
+    let block = (block_size,1,1); //1024
+    let chunk = 256; 
+    let grid_size : i64 = (((ibuffer_size + chunk - 1) / chunk) + block(0) - 1) / block(0); //1 thread takes 256 byte piece 
     let grid = (grid_size * block(0),1,1);
     
     with cuda(0,grid,block) {
 
-        let t_id = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+        let t_id : i64 = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
 
-        let left_bound = t_id * chunk;
-        let mut right_bound = left_bound + chunk + template.size-1; //right not included
+        let left_bound :i64 = t_id * chunk;
+        let mut right_bound :i64 = left_bound + chunk + t_size - 1; //right not included
         
         if right_bound >= ibuffer_size {
             right_bound = ibuffer_size;
@@ -918,9 +983,9 @@ fn string_match_pseudoKMP_nope(template : Template, maximalPatternSize: i8, ibuf
 
         if left_bound < ibuffer_size {
 
-//for each pattern here
+//for each pattern here;
             matchf_no(template,
-                   template.size,
+                   t_size,
                    maximalPatternSize,
                    ibuffer,
                    ibuffer_size,
@@ -939,17 +1004,17 @@ fn string_match_pseudoKMP_nope(template : Template, maximalPatternSize: i8, ibuf
     
 }
 
-fn matchf_no(template : Template,
+fn matchf_no(template : &[u8],
           template_size : i32,
           maximalPatternSize: i8,  
           ibuffer : &[u8], 
-          ibuffer_size : i32, //right_bound if without annotation everything fails
-          left_bound : i32,
-          right_bound : i32,
-          result_buf : &mut[i32], 
+          ibuffer_size : i64, //right_bound if without annotation everything fails
+          left_bound : i64,
+          right_bound : i64,
+          result_buf : &mut[u8], 
           block_size : i32, 
           chunk_size: i32,
-          text_index : i32,//text_index
+          text_index : i64,//text_index
           template_index : i32,
           f : i32, //length of matched area
           ff : i32,
@@ -959,17 +1024,17 @@ fn matchf_no(template : Template,
          }
 
 //TODO replace compare calls
-fn compare_no(template : Template,
+fn compare_no(template : &[u8],
            template_size : i32,  //add annotation to stop pe when size = 1, doesnt pe on some cases
            maximalPatternSize: i8,  
            ibuffer : &[u8], 
-           ibuffer_size : i32, //right bound; if annotation here the PE aborts TODO: figure out why??!
-           left_bound : i32,
-           right_bound : i32,
-           result_buf : &mut[i32], 
+           ibuffer_size : i64, //right bound; if annotation here the PE aborts TODO: figure out why??!
+           left_bound : i64,
+           right_bound : i64,
+           result_buf : &mut[u8], 
            block_size : i32, 
            chunk_size: i32,
-           text_index : i32,
+           text_index : i64,
            template_index : i32,
            f : i32, //length of matched area
            ff : i32, //remembers that we have already matched region
@@ -977,18 +1042,18 @@ fn compare_no(template : Template,
 
 
              if(text_index < left_bound + chunk_size){
-                result_buf(text_index) = -1;
+                result_buf(text_index) = '0';
              }
              
-             if template_index == template.size {
-                result_buf(text_index - template.size) = 1; //text index or i?
+             if template_index == template_size {
+                result_buf(text_index - template_size) = '1'; //text index or i?
                 compare_no(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
              }else if f == 0{
                 //suffix found
                 //if f == 0 & ff != 0 we can match against negative information
                     if text_index == ibuffer_size {
                         return()
-                    }else if ibuffer(text_index) == template.array(template_index) {
+                    }else if ibuffer(text_index) == template(template_index) {
                         if ff == 0 {
                             compare_no(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1,template_index + 1,f,ff+1,headff)
                         }else{
@@ -1004,8 +1069,8 @@ fn compare_no(template : Template,
                         }
                      }
                 //f is the length of matched are
-             }else if template.array(template_index) == template.array(headff + template_index) { //static part
-                         if f == 1 && ff != 0 && template.array(template_index+1) == template.array(headff + ff){
+             }else if template(template_index) == template(headff + template_index) { //static part
+                         if f == 1 && ff != 0 && template(template_index+1) == template(headff + ff){
                             compare_no(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
                          }else {
                             compare_no(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,template_index + 1,f-1,ff,headff)
@@ -1014,3 +1079,4 @@ fn compare_no(template : Template,
                       compare_no(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index,0,ff-1,ff-1,headff+1)
               }
          }
+*/

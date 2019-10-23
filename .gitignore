@@ -3,6 +3,7 @@
 pe_*
 *.out
 fo
+pattern.txt
 test/*
 !test/*.ipynb
 *.code-workspace

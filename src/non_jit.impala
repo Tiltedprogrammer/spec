@@ -1,0 +1,331 @@
+
+//cant check template_size
+fn threadId() -> i64{
+    
+    let block_id : i64 = cuda_blockIdx_y() as i64 * cuda_gridDim_x() as i64 + cuda_blockIdx_x() as i64;
+
+    let t_id  : i64 = cuda_threadIdx_x() as i64  + cuda_blockDim_x() as i64 * block_id;
+
+    return(t_id)
+
+}
+
+extern
+    fn string_match_nope(template : &[u8], template_size: i32 ,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, chunk_size: i32, nochunk : i32 ) -> () {
+             
+                if nochunk == 1 {
+
+                let block = (block_size,1,1);
+
+                // let math = impala_intrinsics;
+                let math = cpu_intrinsics;
+                //can be p'ed;
+                let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+
+
+                let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+
+                let grid = (g * block(0),g*block(0),1); //grid is the overall number of threads;
+             
+                
+                with cuda(0, grid, block) {
+                    
+                    
+                    let t_id  = @@threadId(); //dynamic :(;
+                    
+                    if t_id as i64 < ibuffer_size {
+                        
+                        let mut matched : i8 = 1i8;
+                        result_buf(t_id) = '3';
+
+                        /*if(t_id as i64 < ibuffer_size - template_size as i64 + 1i64){
+
+                            for i in unroll(0,template_size){
+                                if ibuffer(t_id as i64 + i as i64) != template(i) {
+                                    matched = -1i8;
+                                    break()
+                                }
+                            }
+                        
+                            if matched == 1i8 {
+                                result_buf(t_id) = '1';
+                            }
+                        }*/
+                     
+
+                    }
+                }
+             }/*else {
+
+                let block = (block_size, 1, 1); // block is threads per block
+                let grid_size : i32 = (((ibuffer_size + chunk_size - 1) / chunk_size) + block(0) - 1) / block(0);
+             
+                let grid = (block(0) * grid_size, 1, 1); //grid is the overall number of threads
+             
+                //single pattern for now // patterns will be continious arrays of chars;
+                with cuda(0, grid, block) {
+                    // t_id is the position in the buffer;
+                    //  let t_id = cuda_threadId_x() + cuda_blockDim_x() * cuda_blockId_x();
+                    let t_id :i64 = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+                    let left_bound :i64 = t_id * chunk_size; //dynamic :(
+                    if left_bound < ibuffer_size {
+                        
+                        for i in range(0,chunk_size){
+                            
+                            result_buf(left_bound + i) = '0';
+                            
+                            let mut matched = 1;
+
+                            if(i < ibuffer_size - left_bound - template_size + 1){
+                                for j in unroll(0,template_size) {
+                                    if ibuffer(left_bound + i + j) != template(j){
+                                        matched = -1;
+                                        break()
+                                    }
+                                }
+
+                                if matched == 1 {
+
+                                    result_buf(left_bound+i) = '1';
+                                }
+
+                                }
+                        }
+                    }
+
+                }
+             }*/
+    }
+/*
+extern
+    fn match_kmp(template : &[u8], t_size: i32 ,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32) -> (){
+
+    if nochunk == 0 {
+        let block = (block_size,1,1); //1024
+        let chunk = chunk_size; //experiment with it
+        let grid_size : i32 = (((ibuffer_size + chunk - 1) / chunk) + block(0) - 1) / block(0);
+        let grid = (grid_size * block(0),1,1);
+    
+        with cuda(0,grid,block) {
+
+            let t_id :i64 = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+
+            let left_bound :i64 = t_id * chunk;
+            let mut right_bound :i64 = left_bound + chunk + t_size-1; //right not included
+        
+            if right_bound >= ibuffer_size {
+                right_bound = ibuffer_size;
+            }
+
+            if left_bound < ibuffer_size {
+
+                kmp(template,t_size,left_bound,left_bound,right_bound,ibuffer,ibuffer_size,result_buf,chunk,0)
+            }
+        }
+    }else { //nochunk
+
+        let block = (block_size,1,1);
+        let grid_size = (ibuffer_size + block(0) - 1) / block(0);
+        let grid = (grid_size * block(0),1,1);
+
+        with cuda(0,grid,block) {
+
+            let t_id :i64 = cuda_threadIdx_x() + cuda_blockDim_x() * cuda_blockIdx_x();
+
+            if t_id < ibuffer_size {
+                kmp_nc(template,t_size,t_id,ibuffer,ibuffer_size,result_buf)
+            }
+        }
+
+    }
+}
+
+
+// let mut ams = 0; // ams;
+
+    // for i in range(left_bound,right_bound) {;
+        
+        // if (i < left_bound + chunk_size) {;
+
+            // result_buf(i) = -1;
+
+        // };
+
+        // while ams > 0 && template(ams) != ibuffer(i) { //missmatch at i pos;
+            // ams = prefix_function(template,ams-1);
+        // };
+        
+        // if ibuffer(i) == template(ams){;
+            // ams = ams + 1;
+        // };
+
+        // if ams == template_size {;
+
+            // result_buf(i - template_size + 1) = 1;
+            // ams = prefix_function(template,ams-1);
+        
+        // };
+        
+    // };
+
+fn kmp(template : &[u8], @template_size: i32, text_index : i64, left_bound : i64, right_bound : i64, ibuffer : &[u8],ibuffer_size : i64, result_buf : &mut[u8], @chunk_size : i32, @ams : i32) -> () {
+    
+    // fn prefix_function(@index : i32) -> i32{  //pe here ok;
+
+        // fn is_prefix(@k_: i32, @i : i32) -> bool {
+        
+            // let mut isPrefix = true;
+            // if(i < k_){
+
+                // if template(i) != template(index - k_ + 1 + i){
+                    // false
+
+                // }else{
+                    // is_prefix(k_, i + 1)
+                // }
+            // }else {
+                // true
+            // }
+            // for i in unroll(0,k_){
+                // if template(i) != template(index - k_ + 1 + i) {
+                    // return(0)
+                // }
+            // }
+            // return(1);
+        // }
+
+
+        // let mut res = 0;
+            // for i in unroll(0,k_){
+        // for k in unroll(0,index + 1) {
+            // if is_prefix(k,0) {
+                // res = k;
+            // }
+        // }
+
+        // res
+    // }
+
+    // if text_index < right_bound {
+        // result_buf(text_index) = '0';
+    // }
+
+
+    // if(i < ibuffer_size - left_bound - template_size + 1){
+
+        // if ams == template_size{
+            // result_buf(text_index - template_size) = '1';
+        // }else if text_index == right_bound {
+            // return()
+        // }
+
+    // }
+
+    fn prefix_function(@index : i32) -> i32{  //pe here ok;
+
+        fn is_prefix(@k_: i32) -> bool {
+        
+            let mut isPrefix = true;
+        
+            for i in unroll(0,k_){
+                if template(i) != template(index - k_ + 1 + i) {
+                    isPrefix = false;
+                }
+            }
+            isPrefix
+        }
+
+        let mut res = 0;
+        for k in unroll(0,index + 1) {
+            if is_prefix(k) {
+                res = k;
+            }
+        }
+
+        res
+    }
+
+    let mut ams = 0; // ams;
+
+    for i in range(left_bound,right_bound) {
+        
+        if (i < left_bound + chunk_size) {
+
+            result_buf(i) = '0';
+
+        }
+
+        while ams > 0 && template(ams) != ibuffer(i) { //missmatch at i pos;
+            ams = prefix_function(ams-1)
+        }
+        
+        if ibuffer(i) == template(ams){
+            ams = ams + 1;
+        }
+
+        if ams == template_size {
+
+            result_buf(i - template_size + 1) = '1';
+            ams = prefix_function(ams-1);
+        
+        }
+        
+    }
+    
+
+}
+
+fn kmp_nc(template : &[u8], @template_size: i32, t_id : i64, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8]) -> (){
+    
+    fn prefix_function(@index : i32) -> i32{  //pe here ok;
+
+        fn is_prefix(@k_: i32) -> bool {
+        
+            let mut isPrefix = true;
+        
+            for i in unroll(0,k_){
+                if template(i) != template(index - k_ + 1 + i) {
+                    isPrefix = false;
+                }
+            }
+            isPrefix
+        }
+
+        let mut res = 0;
+        for k in unroll(0,index + 1) {
+            if is_prefix(k) {
+                res = k;
+            }
+        }
+
+        res
+    }
+
+    let mut ams = 0; // ams
+
+    for i in unroll(0,template_size) {
+        
+        result_buf(t_id) = '0';
+
+        if(t_id < ibuffer_size - template_size + 1){
+
+            while ams > 0 && template(ams) != ibuffer(t_id+i) { //missmatch at i pos
+                ams = prefix_function(ams-1);
+            }
+        
+            if ibuffer(t_id + i) == template(ams){
+                ams = ams + 1;
+            }
+
+            if ams == template_size {
+
+                result_buf(t_id) = '1';
+                ams = prefix_function(ams-1);
+        
+            }
+        
+        }
+    }
+
+}*/
+
