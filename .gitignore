@@ -3,7 +3,7 @@
 pe_*
 *.out
 fo
-pattern.txt
+test/data/subject.txt
 test/*
 !test/docker
 !test/*.ipynb
