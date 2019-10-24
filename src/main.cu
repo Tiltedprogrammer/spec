@@ -34,9 +34,10 @@ long GetFileSize(std::string filename)
     return size;
 }
 
-std::string read_pattern(std::string filename){
+std::vector<std::string> read_pattern(std::string filename){
     
     std::ifstream file(filename);
+    std::vector<std::string> res = std::vector<std::string>();
  
     if (!file) 
     {
@@ -44,10 +45,13 @@ std::string read_pattern(std::string filename){
     // TODO: assign item_name based on line (or if the entire line is 
     // the item name, replace line with item_name in the code above)
     }
-    std::string str;
-    std::getline(file, str);
+    while(!file.eof()){
+        std::string str;
+        std::getline(file, str);
+        res.push_back(str);
+    }
     // std::getline(file, str);
-    return str;
+    return res;
 
 }
 
@@ -305,12 +309,12 @@ void prefix_f(std::string pattern, int index){
 
 }
 
-void match_pe_pointer_multipattern(int p_number,char** argv_patterns, std::string subject_string_filename) {
+void match_pe_pointer_multipattern(int p_number,std::vector<std::string> vpatterns, std::string subject_string_filename) {
     
     int* sizes = new int[p_number];
     int len = 0;
     for(int i = 1; i < p_number+1; i++) {
-        auto str = std::string(argv_patterns[i]);
+        auto str = std::string(vpatterns[i]);
         sizes[i-1] = str.length();
         len += str.length();    
     }
@@ -322,7 +326,7 @@ void match_pe_pointer_multipattern(int p_number,char** argv_patterns, std::strin
     for(int i = 0; i < p_number; i++){
 
         for(int j = 0; j < sizes[i]; j++){
-            patterns[offset+j] = argv_patterns[i+1][j];
+            patterns[offset+j] = vpatterns[i+1][j];
         }
         offset+=sizes[i];    
     } 
@@ -442,8 +446,11 @@ int main(int argc, char** argv) {
     if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
-        auto pattern = read_pattern(result["pattern"].as<std::string>());
-        // auto pattern = std::string(argv[1]);
+        auto patterns = read_pattern(result["pattern"].as<std::string>());
+        std::string pattern;
+        if(patterns.size() == 1){
+            pattern = patterns[0];
+        }
 
         auto pattern_size = pattern.size();
     // pattern.resize(31,'0'); 

@@ -41,9 +41,10 @@ long GetFileSize(std::string filename)
     return size;
 }
 
-std::string read_pattern(std::string filename){
+std::vector<std::string> read_pattern(std::string filename){
     
     std::ifstream file(filename);
+    std::vector<std::string> res = std::vector<std::string>();
  
     if (!file) 
     {
@@ -51,10 +52,13 @@ std::string read_pattern(std::string filename){
     // TODO: assign item_name based on line (or if the entire line is 
     // the item name, replace line with item_name in the code above)
     }
-    std::string str;
-    std::getline(file, str);
+    while(!file.eof()){
+        std::string str;
+        std::getline(file, str);
+        res.push_back(str);
+    }
     // std::getline(file, str);
-    return str;
+    return res;
 
 }
 
@@ -400,34 +404,31 @@ __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,ch
 }
 
 
-void multipattern_match(int p_number,char** argv_patterns, char* file_name){
+void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* file_name){
 
-    int* sizes = new int[p_number];
+    int* sizes = new int[vpatterns.size()];
     int len = 0;
-    for(int i = 1; i < p_number+1; i++) {
-        auto str = std::string(argv_patterns[i]);
-        sizes[i-1] = str.length();
-        len += str.length();    
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].length();
+        len += sizes[i];    
     }
 
     char* patterns = new char[len];
     
     int offset = 0;
 
-    for(int i = 0; i < p_number; i++){
-
-        for(int j = 0; j < sizes[i]; j++){
-            patterns[offset+j] = argv_patterns[i+1][j];
-        }
-        offset+=sizes[i];    
-    }
-
     char* dpatterns;
     int* dsizes;
-    cudaMalloc((void**)&dsizes, (p_number)*sizeof(int));
-    cudaMemcpy((void*)dsizes, sizes, (p_number)*sizeof(int), cudaMemcpyHostToDevice); 
+    
+    cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
+    cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
+    
     cudaMalloc((void**)&dpatterns, len * sizeof(char));
-    cudaMemcpy((void*)dpatterns, patterns, len*sizeof(char), cudaMemcpyHostToDevice);
+    
+    for(int i = 0; i < vpatterns.size(); i++){
+        cudaMemcpy((void*)(dpatterns + offset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
+        offset+=sizes[i];
+    }
 
     std::string subject_string_filename(file_name);
 
@@ -913,8 +914,11 @@ int main(int argc, char** argv) {
     if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
-        auto pattern = read_pattern(result["pattern"].as<std::string>());
-          //if contains \x00 --- considered empty
+        auto patterns = read_pattern(result["pattern"].as<std::string>());
+        std::string pattern; 
+        if(patterns.size() == 1){
+            pattern = patterns[0];
+        } //if contains \x00 --- considered empty
         if(type == 1 || type == 0){
             if(alg_name == "naive"){
                 match_naive(pattern,filename,type,size,offset);
