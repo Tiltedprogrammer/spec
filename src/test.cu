@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fstream>
+#include <math.h>
 #include "timer.h"
 #include "cxxopts.hpp"
 
@@ -21,18 +22,43 @@ typedef struct Template{
 
 }Template;
 
+__device__ long threadId(){
+    
+    long blockId = (long)blockIdx.y * (long)gridDim.x + (long)blockIdx.x;
+    long threadId = blockId * (long)blockDim.x + (long)threadIdx.x;
+    return threadId;
+
+}
+
 long GetFileSize(std::string filename)
 {
     // struct stat stat_buf;
     // int rc = stat(filename.c_str(), &stat_buf);
     // return rc == 0 ? stat_buf.st_size : -1;
     int fd = open(filename.c_str(),O_RDONLY);  //;
-    int size = lseek(fd, 0, SEEK_END);
+    long size = lseek(fd, 0, SEEK_END);
     close(fd);
     return size;
 }
 
-char* read_file(std::string filename,int &text_size,int size = 0, int offset = 0){
+std::string read_pattern(std::string filename){
+    
+    std::ifstream file(filename);
+ 
+    if (!file) 
+    {
+        std::cout << "error openning pattern file" << "\n"; 
+    // TODO: assign item_name based on line (or if the entire line is 
+    // the item name, replace line with item_name in the code above)
+    }
+    std::string str;
+    std::getline(file, str);
+    // std::getline(file, str);
+    return str;
+
+}
+
+char* read_file(std::string filename,long &text_size,long size = 0, long offset = 0){
     
     long f_size = GetFileSize(filename) - 1;//TODO
     if(f_size == -1){
@@ -68,15 +94,17 @@ char* read_file(std::string filename,int &text_size,int size = 0, int offset = 0
     
     cudaMalloc((void**)&dtextptr, text_size * sizeof(char));
 
-    int nbytes;
+    long nbytes;
 
-    for(int i = 0; i < (text_size + text_chunk - 1) / text_chunk; i++){//number of chunks
+    for(long i = 0; i < (text_size + text_chunk - 1) / text_chunk; i++){//number of chunks
+        
         if(feof(f)){
             std::cout << "premature end of file" << "\n";
             break;
-        } 
-        int right_bound = (i+1) * text_chunk < text_size ? (i+1) * text_chunk : text_size;
-        int left_bound = i * text_chunk;
+        }
+
+        long right_bound = (i+1) * text_chunk < text_size ? (i+1) * text_chunk : text_size;
+        long left_bound = i * text_chunk;
         nbytes = fread(subject_string,sizeof(char),right_bound-(left_bound),f);
         cudaMemcpy((void*)(dtextptr + left_bound),subject_string,nbytes,cudaMemcpyHostToDevice);
 
@@ -115,16 +143,17 @@ void write_from_device(char** dresult_buf,int text_size){
 
 }
 
-__global__ void match(char* pattern, int pattern_size, char* text, int text_size, char* result_buf) {
+__global__ void match(char* pattern, int pattern_size, char* text, long text_size, char* result_buf) {
 
-    long t_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    long t_id = threadId();
 
     if(t_id < text_size){
         int matched = 1;
         result_buf[t_id] = '0';
 
         if(t_id < text_size - pattern_size + 1){
-            #pragma unroll
+            
             for(int i = 0; i < pattern_size; i++) {
                 if(text[t_id + i] != pattern[i]) {
                     matched = -1;
@@ -140,9 +169,9 @@ __global__ void match(char* pattern, int pattern_size, char* text, int text_size
     }
 }
 
-__global__ void match_shared(char* pattern, int pattern_size, char* text, int text_size, char* result_buf) {
+__global__ void match_shared(char* pattern, int pattern_size, char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
     __shared__ char spattern [128];
     if(threadIdx.x < pattern_size) {
         spattern[threadIdx.x] = pattern[threadIdx.x];
@@ -155,7 +184,7 @@ __global__ void match_shared(char* pattern, int pattern_size, char* text, int te
         result_buf[t_id] = '0';
 
         if(t_id < text_size - pattern_size + 1){
-            #pragma unroll
+            
             for(int i = 0; i < pattern_size; i++) {
                 if(text[t_id + i] != spattern[i]) {
                     matched = -1;
@@ -198,9 +227,9 @@ __global__ void match_multy(char* pattern, int* p_sizes, int p_number, char* tex
     }
 }
 
-__global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_size ,char* text, int text_size, char* result_buf) {
+__global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
     __shared__ char spattern [128];
     if(threadIdx.x == 0) {
         for(int i = 0; i < pattern_size; i++){
@@ -236,19 +265,19 @@ __global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_si
     }
 }
 
-__global__ void match_chunk(char* pattern, int pattern_size, int chunk_size ,char* text, int text_size, char* result_buf) {
+__global__ void match_chunk(char* pattern, int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
-    int left_bound = t_id * chunk_size;
+    long t_id = threadId();
+    long left_bound = t_id * chunk_size;
     // int right_bound = left_bound + chunk_size + pattern_size - 1 >= text_size ? text_size  
                                                                         //  : left_bound + chunk_size + pattern_size - 1;
 
     if(left_bound < text_size){
-        for (int i = 0; i < chunk_size && left_bound + i < text_size; i++) {
+        for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
             result_buf[left_bound + i] = '0';
             int matched = 1;
-            #pragma unroll
+            
             for(int j = 0; j < pattern_size; j++) {
 
                 if(text[left_bound + i + j] != pattern[j]) {
@@ -307,16 +336,16 @@ void prefix(const char* pattern, int pattern_size, int* prefix_table){
 	}
 }
 
-__global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char* text, int text_size, char* result_buf,int chunk){
+__global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char* text, long text_size, char* result_buf,int chunk){
     
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
 
-    int left_bound = t_id * chunk;
-    int right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
+    long left_bound = t_id * chunk;
+    long right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
 
     int ams = 0;
 
-    for(int i = left_bound; i < right_bound; i++){
+    for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
             result_buf[i] = '0';
@@ -341,14 +370,14 @@ __global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char
 
 __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,char* text, int text_size, char* result_buf,int chunk){
     
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
 
-    int left_bound = t_id * chunk;
-    int right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
+    long left_bound = t_id * chunk;
+    long right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
 
     int ams = 0;
 
-    for(int i = left_bound; i < right_bound; i++){
+    for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
             result_buf[i] = '0';
@@ -480,7 +509,7 @@ void match_naive(std::string pattern, std::string subject_string_filename, int n
     auto pattern_size = pattern.size();
     
     char* dtextptr;
-    int text_size;
+    long text_size;
 
     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
         std::cout << "error opening file" << "\n";
@@ -498,30 +527,27 @@ void match_naive(std::string pattern, std::string subject_string_filename, int n
     int chunk = 256;
 
     dim3 block(block_size);
-    int grid_size;
-    if(nochunk){
-        grid_size = (text_size + block.x - 1) / block.x;
-    } else{
-        grid_size = (((text_size + chunk - 1) / chunk) + block.x - 1) / block.x;
-    }
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    // cudaEventRecord(start);
+    
     if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         match<<<grid,block>>>(dpattern,pattern_size,dtextptr,text_size,dresult_buf);
-    }else{
+        cudaDeviceSynchronize();
+        time.stop();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         match_chunk<<<grid,block>>>(dpattern,pattern_size,chunk,dtextptr,text_size,dresult_buf);
-        }  
-    cudaDeviceSynchronize();
-    time.stop();
+        cudaDeviceSynchronize();
+        time.stop();
+    }
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
@@ -543,7 +569,7 @@ void match_naive_shared(std::string pattern, std::string subject_string_filename
     }
 
     char* dtextptr;
-    int text_size;
+    long text_size;
     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
         std::cout << "error opening file" << "\n";
         return;
@@ -560,34 +586,29 @@ void match_naive_shared(std::string pattern, std::string subject_string_filename
     int chunk = 256;
 
     dim3 block(block_size);
-    int grid_size;
-    if(nochunk){
-        grid_size = (text_size + block.x - 1) / block.x;
-    } else{
-        grid_size = (((text_size + chunk - 1) / chunk) + block.x - 1) / block.x;
-    }
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    // cudaEventRecord(start);
-    if(nochunk){
-        match_shared<<<grid,block>>>(dpattern,pattern_size,dtextptr,text_size,dresult_buf);
-    }else{
-        match_chunk_shared<<<grid,block>>>(dpattern,pattern_size,chunk,dtextptr,text_size,dresult_buf);
-        }  
-
-    cudaDeviceSynchronize();
-    time.stop();
-
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
+    if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        match_shared<<<grid,block>>>(dpattern,pattern_size,dtextptr,text_size,dresult_buf);
+        cudaDeviceSynchronize();
+        time.stop();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        match_chunk_shared<<<grid,block>>>(dpattern,pattern_size,chunk,dtextptr,text_size,dresult_buf);
+        cudaDeviceSynchronize();
+        time.stop();
+    }
+
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;    
 
     write_from_device(&dresult_buf,text_size);
     
@@ -603,7 +624,7 @@ void match_kmp(std::string pattern, std::string subject_string_filename, int noc
     auto pattern_size = pattern.size();
     
     char* dtextptr;
-    int text_size;
+    long text_size;
     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
         std::cout << "error opening file" << "\n";
         return;
@@ -629,33 +650,27 @@ void match_kmp(std::string pattern, std::string subject_string_filename, int noc
     int chunk = 256;
 
     dim3 block(block_size);
-    int grid_size;
-    if(nochunk){
-        grid_size = (text_size + block.x - 1) / block.x;
-    } else{
-        grid_size = (((text_size + chunk - 1) / chunk) + block.x - 1) / block.x;
-    }
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    // cudaEventRecord(start);
-    if(nochunk){
-        kmp_nochunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
-    }else{
-        kmp_chunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
-        }  
-
-    cudaDeviceSynchronize();
-    time.stop();
-
     
+    if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        kmp_nochunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
+        cudaDeviceSynchronize();
+        time.stop();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        kmp_chunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
+        cudaDeviceSynchronize();
+        time.stop();
+    }
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
     write_from_device(&dresult_buf,text_size);
@@ -664,27 +679,25 @@ void match_kmp(std::string pattern, std::string subject_string_filename, int noc
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
     cudaFree(dpattern);
-    cudaFree(dprefix_table);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);   
+    cudaFree(dprefix_table); 
 }
 
 
 __constant__ char c_pattern[128]; //might be as fast as registers, but not in this case =)
 
-__global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, int text_size, char* result_buf) {
+__global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
-    int left_bound = t_id * chunk_size;
+    long t_id = threadId();
+    long left_bound = t_id * chunk_size;
     // int right_bound = left_bound + chunk_size + pattern_size - 1 >= text_size ? text_size  
                                                                         //  : left_bound + chunk_size + pattern_size - 1;
 
     if(left_bound < text_size){
-        for (int i = 0; i < chunk_size && left_bound + i < text_size; i++) {
+        for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
             result_buf[left_bound + i] = '0';
             int matched = 1;
-            #pragma unroll
+
             for(int j = 0; j < pattern_size; j++) {
                 
                 if(text[left_bound + i + j] != c_pattern[j]) {
@@ -701,15 +714,15 @@ __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, 
     }
 }
 
-__global__ void match_const(int pattern_size, char* text, int text_size, char* result_buf) {
+__global__ void match_const(int pattern_size, char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
 
     if(t_id < text_size){
         int matched = 1;
         result_buf[t_id] = '0';
         if(t_id < text_size - pattern_size + 1){
-            #pragma unroll
+
             for(int i = 0; i < pattern_size; i++) {
                 if(text[t_id + i] != c_pattern[i]) {
                     matched = -1;
@@ -729,14 +742,14 @@ __constant__ int c_prefix[128];
 
 __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char* result_buf,int chunk){
     
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
 
-    int left_bound = t_id * chunk;
-    int right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
+    long left_bound = t_id * chunk;
+    long right_bound = left_bound + chunk + pattern_size - 1 < text_size ? left_bound + chunk + pattern_size - 1 : text_size;
 
     int ams = 0;
 
-    for(int i = left_bound; i < right_bound; i++){
+    for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
             result_buf[i] = '0';
@@ -773,7 +786,7 @@ void match_naive_const(std::string pattern, std::string subject_string_filename,
     // cudaMemcpyToSymbol(c_prefix,(void*)prefix_table,pattern.size()*sizeof(int));
     // delete[](prefix_table);
 
-    int text_size;//TODO
+    long text_size;//TODO
 
     char* dtextptr;
     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
@@ -788,32 +801,27 @@ void match_naive_const(std::string pattern, std::string subject_string_filename,
     int chunk = 256;
 
     dim3 block(block_size);
-    int grid_size;
-    if(nochunk){
-        grid_size = (text_size + block.x - 1) / block.x;
-    } else{
-        grid_size = (((text_size + chunk - 1) / chunk) + block.x - 1) / block.x;
-    }
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    // cudaEventRecord(start);
+    
     if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         match_const<<<grid,block>>>(pattern_size,dtextptr,text_size,dresult_buf);
-    }else{
+        cudaDeviceSynchronize();
+        time.stop();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         match_chunk_const<<<grid,block>>>(pattern_size,chunk,dtextptr,text_size,dresult_buf);
-        }  
-    //move results back;
-
-    cudaDeviceSynchronize();
-    time.stop();
+        cudaDeviceSynchronize();
+        time.stop();
+    }
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
@@ -838,7 +846,7 @@ void match_kmp_const(std::string pattern, std::string subject_string_filename, i
     cudaMemcpyToSymbol(c_prefix,(void*)prefix_table,pattern.size()*sizeof(int));
     delete[](prefix_table);
 
-    int text_size;//TODO
+    long text_size;//TODO
 
     char* dtextptr;
     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
@@ -853,32 +861,27 @@ void match_kmp_const(std::string pattern, std::string subject_string_filename, i
     int chunk = 256;
 
     dim3 block(block_size);
-    int grid_size;
-    if(nochunk){
-        grid_size = (text_size + block.x - 1) / block.x;
-    } else{
-        grid_size = (((text_size + chunk - 1) / chunk) + block.x - 1) / block.x;
-    }
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    // cudaEventRecord(start);
+    
     if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         match_const<<<grid,block>>>(pattern_size,dtextptr,text_size,dresult_buf);
-    }else{
+        cudaDeviceSynchronize();
+        time.stop();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
         kmp_chunk_const<<<grid,block>>>(pattern_size,dtextptr,text_size,dresult_buf,chunk);
-        }  
-    //move results back;
-
-    cudaDeviceSynchronize();
-    time.stop();
+        cudaDeviceSynchronize();
+        time.stop();
+    }
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
@@ -910,7 +913,8 @@ int main(int argc, char** argv) {
     if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
-        auto pattern = result["pattern"].as<std::string>();  //if contains \x00 --- considered empty
+        auto pattern = read_pattern(result["pattern"].as<std::string>());
+          //if contains \x00 --- considered empty
         if(type == 1 || type == 0){
             if(alg_name == "naive"){
                 match_naive(pattern,filename,type,size,offset);

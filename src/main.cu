@@ -30,9 +30,25 @@ long GetFileSize(std::string filename)
     // return rc == 0 ? stat_buf.st_size : -1;
     int fd = open(filename.c_str(),O_RDONLY);  //;
     long size = lseek(fd, 0, SEEK_END);
-    std::cout << "HELLO" << errno << " " << EOVERFLOW << "\n";
     close(fd);
     return size;
+}
+
+std::string read_pattern(std::string filename){
+    
+    std::ifstream file(filename);
+ 
+    if (!file) 
+    {
+        std::cout << "error openning pattern file" << "\n"; 
+    // TODO: assign item_name based on line (or if the entire line is 
+    // the item name, replace line with item_name in the code above)
+    }
+    std::string str;
+    std::getline(file, str);
+    // std::getline(file, str);
+    return str;
+
 }
 
 char* read_file(std::string filename,long &text_size,long size = 0, long offset = 0){
@@ -426,7 +442,8 @@ int main(int argc, char** argv) {
     if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
-        auto pattern = result["pattern"].as<std::string>();
+        auto pattern = read_pattern(result["pattern"].as<std::string>());
+        // auto pattern = std::string(argv[1]);
 
         auto pattern_size = pattern.size();
     // pattern.resize(31,'0'); 
@@ -535,6 +552,7 @@ int main(int argc, char** argv) {
                 match_pe(filename,size,offset,match_naive_nochunk);
             }
         }else {
+            std::cout << pattern;
             std::cout << "type should be either 1 or 0" << "\n";
         }
     }
