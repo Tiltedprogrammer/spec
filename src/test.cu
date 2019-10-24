@@ -500,7 +500,7 @@ void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* f
 
 }
 
-void match_naive(std::string pattern, std::string subject_string_filename, int nochunk, int size, int offset){ //nochunk == 0 => nochunk
+void match_naive(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset){ //nochunk == 0 => nochunk
 
     if (pattern.size() > 128) {
         std::cout << "pattern should be less then or eq 128 bytes\n";
@@ -562,7 +562,7 @@ void match_naive(std::string pattern, std::string subject_string_filename, int n
 
 
 
-void match_naive_shared(std::string pattern, std::string subject_string_filename, int nochunk,int size, int offset){ //nochunk == 0 => nochunk
+void match_naive_shared(std::string pattern, std::string subject_string_filename, long nochunk,long size, int offset){ //nochunk == 0 => nochunk
 
     if (pattern.size() > 128) {
         std::cout << "pattern should be less then or eq 128 bytes\n";
@@ -620,7 +620,7 @@ void match_naive_shared(std::string pattern, std::string subject_string_filename
 }
 
 
-void match_kmp(std::string pattern, std::string subject_string_filename, int nochunk,int size,int offset){ //nochunk == 0 => nochunk
+void match_kmp(std::string pattern, std::string subject_string_filename, int nochunk,long size,long offset){ //nochunk == 0 => nochunk
 
     auto pattern_size = pattern.size();
     
@@ -772,7 +772,7 @@ __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char
     }
 }
 
-void match_naive_const(std::string pattern, std::string subject_string_filename, int nochunk,int size, int offset){
+void match_naive_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset){
     
     if (pattern.size() > 128) {
         std::cout << "pattern should be less then or eq 128 bytes\n";
@@ -832,7 +832,7 @@ void match_naive_const(std::string pattern, std::string subject_string_filename,
     cudaFree(dtextptr);
 }
 
-void match_kmp_const(std::string pattern, std::string subject_string_filename, int nochunk,int size, int offset){
+void match_kmp_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset){
     
     if (pattern.size() > 128) {
         std::cout << "pattern should be less then or eq 128 bytes\n";
@@ -895,8 +895,8 @@ void match_kmp_const(std::string pattern, std::string subject_string_filename, i
 int main(int argc, char** argv) {
 
     
-    int size = 0;
-    int offset = 0;
+    long size = 0;
+    long offset = 0;
     int type = 0;
     
     cxxopts::Options options("as", " - example command line options");
