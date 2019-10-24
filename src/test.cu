@@ -903,8 +903,8 @@ int main(int argc, char** argv) {
 
     options.add_options()("p,pattern","pattern to look for",cxxopts::value<std::string>())
                          ("f,filename","filename/devicename to look for in",cxxopts::value<std::string>())
-                         ("s,size", "size of data to read",cxxopts::value<int>(size)->default_value("0"))
-                         ("o,offset", "offset of data to read",cxxopts::value<int>(offset)->default_value("0"))
+                         ("s,size", "size of data to read",cxxopts::value<long>(size)->default_value("0"))
+                         ("o,offset", "offset of data to read",cxxopts::value<long>(offset)->default_value("0"))
                          ("a,algorithm","algorithm to look for with",cxxopts::value<std::string>())
                          ("t,type","type of algorithm: 0 stands for nochunk-based and 1 for chunk-based",cxxopts::value<int>(type));
     // std::string subject_string_filename("data/subject.txt");
