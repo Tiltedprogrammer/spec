@@ -43,18 +43,20 @@ long GetFileSize(std::string filename)
 
 std::vector<std::string> read_pattern(std::string filename){
     
-    std::ifstream file(filename);
+    std::ifstream file(filename,std::ios::binary);
     std::vector<std::string> res = std::vector<std::string>();
  
     if (!file) 
     {
         std::cout << "error openning pattern file" << "\n"; 
+        return res;
     // TODO: assign item_name based on line (or if the entire line is 
     // the item name, replace line with item_name in the code above)
     }
     while(!file.eof()){
+
         std::string str;
-        std::getline(file, str);
+        std::getline(file,str,'\0');
         res.push_back(str);
     }
     // std::getline(file, str);
@@ -120,7 +122,7 @@ char* read_file(std::string filename,long &text_size,long size = 0, long offset 
     return dtextptr;
 }
 
-void write_from_device(char** dresult_buf,int text_size){
+void write_from_device(char** dresult_buf,long text_size){
 
     int text_chunk = 128 * 1024 * 1024;
     if(text_size < text_chunk) {
@@ -130,14 +132,14 @@ void write_from_device(char** dresult_buf,int text_size){
     char* result_buf = new char[text_chunk];
 
 
-    for(int i = 0; i < (text_size + text_chunk - 1) / text_chunk; i++){ //number of chunks
+    for(long i = 0; i < (text_size + text_chunk - 1) / text_chunk; i++){ //number of chunks
 
         int right_bound = (i+1) * text_chunk < text_size ? (i+1) * text_chunk : text_size;
         int left_bound = i * text_chunk;
 
         cudaMemcpy((void*)(result_buf),((*dresult_buf)+left_bound),(right_bound-(left_bound))*sizeof(char),cudaMemcpyDeviceToHost);
         
-        for (int i = 0; i < (right_bound-left_bound); i++) {
+        for (long i = 0; i < (right_bound-left_bound); i++) {
             std::cout << result_buf[i];
         }
 
@@ -412,8 +414,6 @@ void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* f
         sizes[i] = vpatterns[i].length();
         len += sizes[i];    
     }
-
-    char* patterns = new char[len];
     
     int offset = 0;
 
@@ -471,7 +471,6 @@ void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* f
     cudaDeviceSynchronize();
     time.stop();
     delete[](sizes);
-    delete[](patterns);
     delete[](subject_string);
     
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
@@ -918,6 +917,9 @@ int main(int argc, char** argv) {
         std::string pattern; 
         if(patterns.size() == 1){
             pattern = patterns[0];
+        }else{
+            std::cout << "bad patterns" << "\n";
+            return 0;
         } //if contains \x00 --- considered empty
         if(type == 1 || type == 0){
             if(alg_name == "naive"){
@@ -930,6 +932,7 @@ int main(int argc, char** argv) {
                 match_kmp_const(pattern,filename,0,size,offset);
             }
         }else{
+            std::cout << pattern << " " << pattern.size() << "\n";
             std::cout << "type should be either 1 or 0" << "\n";
         }
     }else{

@@ -36,18 +36,20 @@ long GetFileSize(std::string filename)
 
 std::vector<std::string> read_pattern(std::string filename){
     
-    std::ifstream file(filename);
+    std::ifstream file(filename,std::ios::binary);
     std::vector<std::string> res = std::vector<std::string>();
  
     if (!file) 
     {
         std::cout << "error openning pattern file" << "\n"; 
+        return res;
     // TODO: assign item_name based on line (or if the entire line is 
     // the item name, replace line with item_name in the code above)
     }
     while(!file.eof()){
+
         std::string str;
-        std::getline(file, str);
+        std::getline(file,str,'\0');
         res.push_back(str);
     }
     // std::getline(file, str);
@@ -450,6 +452,9 @@ int main(int argc, char** argv) {
         std::string pattern;
         if(patterns.size() == 1){
             pattern = patterns[0];
+        }else{
+            std::cout << "bad pattern/failed to read file" << "\n";
+            return 0;
         }
 
         auto pattern_size = pattern.size();
@@ -559,7 +564,7 @@ int main(int argc, char** argv) {
                 match_pe(filename,size,offset,match_naive_nochunk);
             }
         }else {
-            std::cout << pattern;
+            std::cout << pattern << " " << pattern.size() << "\n";
             std::cout << "type should be either 1 or 0" << "\n";
         }
     }

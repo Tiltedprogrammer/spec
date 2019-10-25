@@ -397,7 +397,7 @@ fn comparep(@(template_size > 1)template : &[u8],
 //using unified memory for results_buf for now, blocksize = 512;
 //each thread proccesses area of chunk_size size;
 //template here should be in device memory or to be a struct;
-fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
+fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
              
             if nochunk == 1 {
 
@@ -406,8 +406,9 @@ fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8,
                 //can be p'ed;
                 let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
                 let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
-                let grid = (g * block(0),g*block(0),1); //grid is the overall number of threads;
-             
+                //g x g blocks;
+                let grid = (g * block(0),g,1); //grid is the overall number of threads; second dim is divided by second of a block
+                             
                 
                 with cuda(0, grid, block) {
                     
