@@ -17,7 +17,7 @@
 #include "timer.h"
 #include "cxxopts.hpp"
 
-#define block_size 1024
+#define block_size BLOCK_SIZE
 
 extern "C" void string_match_nope(const char*,int,short int,char*,long,char*,int,int,int);
 // extern "C" void match_kmp(const char*,int,short int,char*,long,char*,int,int,int);
@@ -59,7 +59,7 @@ std::vector<std::string> read_pattern(std::string filename){
 
 char* read_file(std::string filename,long &text_size,long size = 0, long offset = 0){
     
-    long f_size = GetFileSize(filename) - 1;//TODO
+    long f_size = GetFileSize(filename);//TODO
     if(f_size == -1){
         std::cout << "bad_size" << "\n";
         return nullptr;
@@ -134,7 +134,7 @@ void write_from_device(char** dresult_buf,long text_size){
         cudaMemcpy((void*)(result_buf),((*dresult_buf)+left_bound),(right_bound-(left_bound))*sizeof(char),cudaMemcpyDeviceToHost);
         
         for (long i = 0; i < (right_bound-left_bound); i++) {
-            std::cout << result_buf[i];
+            std::cout << (int)result_buf[i];
         }
 
     }
@@ -144,7 +144,7 @@ void write_from_device(char** dresult_buf,long text_size){
 }
 
 
-void match_pe(std::string subject_string_filename,long size, long offset,std::string program_) {
+void match_pe(std::string subject_string_filename,long size, long offset,std::string program_, int verbose) {
     
         
     std::string program = std::string((char*)fun_impala) + program_;
@@ -183,8 +183,11 @@ void match_pe(std::string subject_string_filename,long size, long offset,std::st
     time.stop();
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    write_from_device(&dresult_buf,text_size);
+    if(verbose){
+       
+        write_from_device(&dresult_buf,text_size);
     
+    }
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
 }
@@ -240,7 +243,7 @@ void match_pe_pat(std::string subject_string_filename,std::string program_,std::
 }
 
 template<typename Function>
-void match_nope(std::string subject_string_filename,std::string pattern,int pattern_size, int nochunk, Function f,long size,long offset) {
+void match_nope(std::string subject_string_filename,std::string pattern,int pattern_size, int nochunk, Function f,long size,long offset,int verbose) {
     
     am::timer time;
 
@@ -274,8 +277,10 @@ void match_nope(std::string subject_string_filename,std::string pattern,int patt
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
     cudaFree(d_pat);
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
@@ -311,36 +316,34 @@ void prefix_f(std::string pattern, int index){
 
 }
 
-void match_pe_pointer_multipattern(int p_number,std::vector<std::string> vpatterns, std::string subject_string_filename) {
+void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::string subject_string_filename, long size, long offset, int verbose) {
     
-    int* sizes = new int[p_number];
+    std::string sizes;
+
     int len = 0;
-    for(int i = 1; i < p_number+1; i++) {
-        auto str = std::string(vpatterns[i]);
-        sizes[i-1] = str.length();
-        len += str.length();    
+    sizes = std::to_string(vpatterns[0].size());
+    for(int i = 1; i < vpatterns.size(); i++) {
+        sizes += "," + std::to_string(vpatterns[i].size());
+        len +=  vpatterns[i].size();   
+    }
+    
+    char* dtextptr;
+    long text_size;
+
+    if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
     }
 
-    char* patterns = new char[len];
-    
-    int offset = 0;
-
-    for(int i = 0; i < p_number; i++){
-
-        for(int j = 0; j < sizes[i]; j++){
-            patterns[offset+j] = vpatterns[i+1][j];
-        }
-        offset+=sizes[i];    
-    } 
-        
     std::string dummy_fun;
 
+    std::string patterns;
+    for (auto &vp : vpatterns) patterns += vp;
     //maybe asyncronous read from disk and jit;
-    dummy_fun += "extern fn dummy(text : &[u8], text_size : i32, result_buf : &mut[i32]) -> (){\n";
+    dummy_fun += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-//TODO max_pattern_size
-    dummy_fun += "  string_match_pseudoKMP_pointer_multiple( \"" + std::string(patterns) + "\", "
-              + "["+ std::to_string(sizes[1]) + "]" + "," + std::to_string(p_number)+",3, text, text_size,result_buf,256,256)}"; //;
+    dummy_fun += "  string_match_multiple(\"" + patterns + "\","
+              + "["+ sizes + "]" + "," + std::to_string(vpatterns.size()) + "u8,text, text_size,result_buf,"+std::to_string(block_size)+")}"; //;
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
 
@@ -349,7 +352,7 @@ void match_pe_pointer_multipattern(int p_number,std::vector<std::string> vpatter
     // time.start();
 
     auto key = anydsl_compile(program.c_str(),program.size(),0);
-    typedef void (*function) (const char*, int, const int *);
+    typedef void (*function) (const char*, long, const char *);
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
     if (call == nullptr) {
@@ -359,66 +362,28 @@ void match_pe_pointer_multipattern(int p_number,std::vector<std::string> vpatter
         std::cout << "succesfully compiled\n";
     }
 
-    // time.stop();
-    // std::cout << "compilation time " << time.milliseconds() << " ms" << std::endl;
-    
-
-    auto text_size = GetFileSize(subject_string_filename) - 1;//TODO
-    
-    //read file
-    FILE *f = fopen(subject_string_filename.c_str(), "rb");
-    // fseek(f, 0, SEEK_END);
-    // long fsize = ftell(f);
-    // fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
-
-    char *subject_string = new char[text_size];
-    fread(subject_string, 1, text_size, f);
-    fclose(f);
-
-    // string[fsize] = 0;
-    // int fdin,fdout;
-    // if (fdin = open(subject_string_filename.c_str(),O_RDONLY) < 0) {
-        // std::cout << "can't open file" << subject_string_filename << "\n";
-        // return;
-    // }
-    // char *subject_string = new char[text_size];
-    // read(fdin,(void*)subject_string,text_size);
-    
     std::cout << "\n";
-    int* result_buf = new int[text_size];
-    int* dresult_buf;
-    char* dtext;
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
     //think about data transfer;
-    cudaMalloc((void**)&dtext, text_size * sizeof(char));
-    cudaMemcpy((void*)dtext,subject_string,text_size * sizeof(char),cudaMemcpyHostToDevice);
-    delete[](subject_string);
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
-    
-    // for(int i = 0; i < text_size; i++) {
-        // result_buf[i] = -1;
-    // }
-    // cudaMemset((void*)dresult_buf, -1, text_size*sizeof(int));
-    
-    // call(text.c_str(),text_size,result_buf);
-    // time.reset();
+  
     std::cout << "running ... " << "\n";
     time.start();
     
-    call(dtext,text_size,dresult_buf);
+    call(dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
 
     time.stop();
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    cudaMemcpy((void*)result_buf,dresult_buf,text_size*sizeof(int),cudaMemcpyDeviceToHost);
-
-    for (int i = 0; i < text_size; i++) {
-        std::cout << result_buf[i];
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
     }
-    std::cout << "\n";
     
     cudaFree(dresult_buf);
-    cudaFree(dtext);
-    delete[] (result_buf);
+    cudaFree(dtextptr);
 }
 
 
@@ -432,6 +397,7 @@ int main(int argc, char** argv) {
     long size = 0;
     long offset = 0;
     int type = 0;
+    int verbose = 1;
     
     cxxopts::Options options("as", " - example command line options");
 
@@ -440,23 +406,20 @@ int main(int argc, char** argv) {
                          ("s,size", "size of data to read",cxxopts::value<long>(size)->default_value("0"))
                          ("o,offset", "offset of data to read",cxxopts::value<long>(offset)->default_value("0"))
                          ("a,algorithm","algorithm to look for with",cxxopts::value<std::string>())
-                         ("t,type","type of algorithm: 0 stands for nochunk-based and 1 for chunk-based",cxxopts::value<int>(type));
+                         ("t,type","type of algorithm: 0 stands for nochunk-based and 1 for chunk-based",cxxopts::value<int>(type))
+                         ("v,verbose","print result or not 0 stands for 'No' 1 for 'Yes'",cxxopts::value<int>(verbose));
     // std::string subject_string_filename("data/subject.txt");
 
     auto result = options.parse(argc, argv);
 
-    if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
+    if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename") && result.count("verbose")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
         auto patterns = read_pattern(result["pattern"].as<std::string>());
         std::string pattern;
-        if(patterns.size() == 1){
+        if(patterns.size() >= 1){
             pattern = patterns[0];
-        }else{
-            std::cout << "bad pattern/failed to read file" << "\n";
-            return 0;
-        }
-
+        
         auto pattern_size = pattern.size();
     // pattern.resize(31,'0'); 
 
@@ -539,35 +502,41 @@ int main(int argc, char** argv) {
 
         match_pseudoKMP_nochunk_nope_annotated += "  string_match_pseudoKMP_nochunk_nope(pattern,p_size,32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;         
 
-        if (pattern.size() > 128) {
-            std::cout << "pattern should be less then or eq 128 bytes\n";
-            return 0;
-        }
         if(type == 0){
             if(alg_name == "r_naive_spec"){
-                match_pe(filename,size,offset,r_naive_spec);
+                match_pe(filename,size,offset,r_naive_spec,verbose);
             }else if(alg_name == "kmp"){
-                match_pe(filename,size,offset,match_KMP_chunk);
+                match_pe(filename,size,offset,match_KMP_chunk,verbose);
             }else if(alg_name == "cleankmp"){
                 // match_nope(filename,pattern,pattern_size,0,match_kmp,size,offset);
             }else if(alg_name == "cleanpe"){
-                match_pe(filename,size,offset,match_naive_chunk);
+                match_pe(filename,size,offset,match_naive_chunk,verbose);
+            }else if(alg_name == "mcleanpe"){
+                match_pe_pointer_multipattern(patterns,filename,size,offset,verbose);
+            }else{
+                std::cout << "no such algorithm" << "\n";
             }
         }else if(type == 1){
             if(alg_name == "r_naive_spec"){
-                match_pe(filename,size,offset,match_pseudoKMP_nochunk);
+                match_pe(filename,size,offset,match_pseudoKMP_nochunk,verbose);
             }else if(alg_name == "kmp"){
-                match_pe(filename,size,offset,match_KMP_nochunk);
+                match_pe(filename,size,offset,match_KMP_nochunk,verbose);
             }else if(alg_name == "cleankmp"){
-                match_nope(filename,pattern,pattern_size,1,string_match_nope,size,offset);
+                match_nope(filename,pattern,pattern_size,1,string_match_nope,size,offset,verbose);
             }else if(alg_name == "cleanpe"){
-                match_pe(filename,size,offset,match_naive_nochunk);
+                match_pe(filename,size,offset,match_naive_nochunk,verbose);
+            }else if(alg_name == "mcleanpe"){
+                match_pe_pointer_multipattern(patterns,filename,size,offset,verbose);
+            }else{
+                std::cout << "no such algorithm" << "\n";
             }
         }else {
-            std::cout << pattern << " " << pattern.size() << "\n";
             std::cout << "type should be either 1 or 0" << "\n";
         }
-    }
+        }
+        }else{
+            std::cout << "bad patterns" <<"\n";
+        }
 
     return 0;
 }

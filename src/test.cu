@@ -13,7 +13,17 @@
 #include "cxxopts.hpp"
 
 
-#define block_size 1024
+#define block_size BLOCK_SIZE
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
 
 typedef struct Template{
 
@@ -66,7 +76,7 @@ std::vector<std::string> read_pattern(std::string filename){
 
 char* read_file(std::string filename,long &text_size,long size = 0, long offset = 0){
     
-    long f_size = GetFileSize(filename) - 1;//TODO
+    long f_size = GetFileSize(filename);//TODO
     if(f_size == -1){
         std::cout << "bad_size" << "\n";
         return nullptr;
@@ -140,7 +150,7 @@ void write_from_device(char** dresult_buf,long text_size){
         cudaMemcpy((void*)(result_buf),((*dresult_buf)+left_bound),(right_bound-(left_bound))*sizeof(char),cudaMemcpyDeviceToHost);
         
         for (long i = 0; i < (right_bound-left_bound); i++) {
-            std::cout << result_buf[i];
+            std::cout << (int)(result_buf[i]);
         }
 
     }
@@ -156,7 +166,7 @@ __global__ void match(char* pattern, int pattern_size, char* text, long text_siz
 
     if(t_id < text_size){
         int matched = 1;
-        result_buf[t_id] = '0';
+        result_buf[t_id] = 0;
 
         if(t_id < text_size - pattern_size + 1){
             
@@ -167,7 +177,7 @@ __global__ void match(char* pattern, int pattern_size, char* text, long text_siz
                 }
             }
             if(matched == 1) {
-                result_buf[t_id] = '1';
+                result_buf[t_id] = 1;
             }             
         }
                      
@@ -187,7 +197,7 @@ __global__ void match_shared(char* pattern, int pattern_size, char* text, long t
     if(t_id < text_size){
         
         int matched = 1;
-        result_buf[t_id] = '0';
+        result_buf[t_id] = 0;
 
         if(t_id < text_size - pattern_size + 1){
             
@@ -198,37 +208,71 @@ __global__ void match_shared(char* pattern, int pattern_size, char* text, long t
                 }
             }
             if(matched == 1) {
-                result_buf[t_id] = '1';
+                result_buf[t_id] = 1;
             }             
         }
                      
     }
 }
 
-__global__ void match_multy(char* pattern, int* p_sizes, int p_number, char* text, int text_size, int* result_buf) {
+__global__ void match_multy(char* patterns, int* p_sizes, int p_number, char* text, long text_size, char* result_buf) {
 
-    int t_id = blockIdx.x * blockDim.x + threadIdx.x;
+    long t_id = threadId();
 
     if(t_id < text_size){
         int p_offset = 0;
-        int matched = 0;
-        result_buf[t_id] = -1;
+        int matched = 1;
+        
+        result_buf[t_id] = 0;
 
-        for(int i = 0; i < p_number; i++) {
-            matched = 0;
-            for(int j = 0; j < p_sizes[i]; j++){
+        for(int i = 0; i < p_number; i++) {//for each pattern
+            matched = 1;
+            if(t_id < text_size - p_sizes[i] + 1) {
+                for(int j = 0; j < p_sizes[i]; j++) {
                 
-                if(text[t_id + j] != pattern[j+p_offset]) {
-                    matched = -1;
-                    break;
+                    if(text[t_id + j] != patterns[j+p_offset]) {
+                        matched = -1;
+                        break;
+                    }
+                } 
+            
+                if(matched == 1) {
+                    result_buf[t_id] = i+1; // 0 stands for missmatch
                 }
             }
+            p_offset += p_sizes[i];
+        }             
+    }
+}
 
-            p_offset += p_sizes[i]; 
+__constant__ char mpatterns[128*64];
+__constant__ int cp_sizes[64];
+__global__ void match_multy_const(int p_number, char* text, long text_size, char* result_buf) {
+
+    long t_id = threadId();
+
+    if(t_id < text_size){
+        int p_offset = 0;
+        int matched = 1;
+        result_buf[t_id] = 0;
+
+        for(int i = 0; i < p_number; i++) {//for each pattern
+            matched = 1;
+            if(t_id < text_size - cp_sizes[i] + 1){
+                for(int j = 0; j < cp_sizes[i]; j++) {
             
-            if(matched != -1) {
-                result_buf[t_id] = i;
+                    if(text[t_id + j] != mpatterns[j + p_offset]) {
+                        matched = -1;
+                        // printf("huy %i\n",i);
+                        break;
+                    }
+                } 
+            
+                if(matched == 1) {
+                    result_buf[t_id] = i+1; // 0 stands for missmatch
+                }
             }
+            p_offset += cp_sizes[i];
         }             
     }
 }
@@ -250,10 +294,10 @@ __global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_si
     if(left_bound < text_size){
         for (int i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
-            result_buf[left_bound + i] = '0';
+            result_buf[left_bound + i] = 0;
             int matched = 1;
             if(i < text_size - left_bound - pattern_size + 1){
-                #pragma unroll
+
                 for(int j = 0; j < pattern_size; j++) {
 
                     if(text[left_bound + i + j] != spattern[j]) {
@@ -263,7 +307,7 @@ __global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_si
                 }
 
                 if(matched == 1) {
-                    result_buf[left_bound + i] = '1';
+                    result_buf[left_bound + i] = 1;
                 }
             }
         }
@@ -281,7 +325,7 @@ __global__ void match_chunk(char* pattern, int pattern_size, int chunk_size ,cha
     if(left_bound < text_size){
         for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
-            result_buf[left_bound + i] = '0';
+            result_buf[left_bound + i] = 0;
             int matched = 1;
             
             for(int j = 0; j < pattern_size; j++) {
@@ -293,7 +337,7 @@ __global__ void match_chunk(char* pattern, int pattern_size, int chunk_size ,cha
             }
 
             if(matched == 1) {
-                result_buf[left_bound + i] = '1';
+                result_buf[left_bound + i] = 1;
             }
         }
                              
@@ -354,7 +398,7 @@ __global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char
     for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
-            result_buf[i] = '0';
+            result_buf[i] = 0;
         }
 
         while(ams > 0 && pattern[ams] != text[i]){
@@ -365,7 +409,7 @@ __global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char
             ams += 1;
         }
         if(ams == pattern_size) {
-            result_buf[i-pattern_size + 1] = '1';
+            result_buf[i-pattern_size + 1] = 1;
             ams = prefix_table[ams-1];
         }
 
@@ -386,7 +430,7 @@ __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,ch
     for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
-            result_buf[i] = '0';
+            result_buf[i] = 0;
         }
 
         while(ams > 0 && pattern[ams] != text[i]){
@@ -397,7 +441,7 @@ __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,ch
             ams += 1;
         }
         if(ams == pattern_size) {
-            result_buf[i-pattern_size + 1] = '1';
+            result_buf[i-pattern_size + 1] = 1;
             ams = prefix_table[ams-1];
         }
 
@@ -406,19 +450,28 @@ __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,ch
 }
 
 
-void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* file_name){
+void multipattern_match(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose){
 
     int* sizes = new int[vpatterns.size()];
+
     int len = 0;
     for(int i = 0; i < vpatterns.size(); i++) {
-        sizes[i] = vpatterns[i].length();
+        sizes[i] = vpatterns[i].size();
         len += sizes[i];    
     }
     
-    int offset = 0;
+    int loffset = 0;
 
     char* dpatterns;
     int* dsizes;
+
+    char* dtextptr;
+    long text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
     
     cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
     cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
@@ -426,85 +479,121 @@ void multipattern_match(int p_number,std::vector<std::string> vpatterns, char* f
     cudaMalloc((void**)&dpatterns, len * sizeof(char));
     
     for(int i = 0; i < vpatterns.size(); i++){
-        cudaMemcpy((void*)(dpatterns + offset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
-        offset+=sizes[i];
+        cudaMemcpy((void*)(dpatterns + loffset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
+        loffset += sizes[i];
     }
-
-    std::string subject_string_filename(file_name);
-
-    auto text_size = GetFileSize(subject_string_filename) - 1;//TODO
     
-    //read file
-    FILE *f;
-    if((f = fopen(subject_string_filename.c_str(), "rb")) == NULL){
-	std::cout << "can not oppen file" << subject_string_filename << "\n";
-	    return;
-    }
-
-    char *subject_string = new char[text_size];
-    fread(subject_string, 1, text_size, f);
-    fclose(f);
-    // std::cin >> text;
-    int* result_buf = new int[text_size];
-    int* dresult_buf;
-    // std::cout << "text length : " << text_size << "\n";
-    char* textptr;
-    //think about data transfer;
-    cudaMalloc((void**)&textptr, text_size * sizeof(char));
-    cudaMemcpy((void*)textptr,subject_string,text_size,cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
+    char* dresult_buf;
     
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    
+    //nochunk only
     dim3 block(block_size);
-    int grid_size = (text_size + block.x - 1) / block.x;
-    dim3 grid(grid_size);
-
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    std::cout << "running ..." << "\n";
-
+    long grid_size;
+    long gsqrt;
     am::timer time;
+    std::cout << "running ..." << "\n";
     time.start();
-    match_multy<<<grid,block>>>(dpatterns,dsizes,p_number,textptr,text_size,dresult_buf);
-    // cudaEventRecord(stop);
+
+    grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    gsqrt = (int)sqrt(grid_size) + 1;
+    dim3 grid(gsqrt,gsqrt);
+    match_multy<<<grid,block>>>(dpatterns,dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
     time.stop();
+
+    
     delete[](sizes);
-    delete[](subject_string);
+    
     
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-    cudaMemcpy((void*)result_buf,dresult_buf,text_size*sizeof(int),cudaMemcpyDeviceToHost);
-    // cudaEventSynchronize(stop);
-    cudaDeviceSynchronize();
-
-    float milliseconds = 0;
-    // cudaEventElapsedTime(&milliseconds, start, stop);
-
-    // std::cout << "running time " << milliseconds << "ms" << "\n";
-
-
-
-    for (int i = 0; i < text_size; i++) {
-        std::cout << result_buf[i];
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
     }
-    std::cout << "\n";
     
     cudaFree(dresult_buf);
-    cudaFree(textptr);
-    // cudaFree(dpattern);
+    cudaFree(dtextptr);
+    cudaFree(dpatterns);
+    cudaFree(dsizes);
     // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
-    delete[] (result_buf);  
-
+    // cudaEventDestroy(stop);  
 }
 
-void match_naive(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset){ //nochunk == 0 => nochunk
+void multipattern_match_const(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose){
 
-    if (pattern.size() > 128) {
-        std::cout << "pattern should be less then or eq 128 bytes\n";
+    int* sizes = new int[vpatterns.size()];
+
+    int len = 0;
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].size();
+        len += sizes[i];     
+    }
+    
+    int loffset = 0;
+
+    // char* dpatterns;
+    // int* dsizes;
+
+    char* dtextptr;
+    long text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
         return;
     }
+    
+    // cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
+    
+    cudaMemcpyToSymbol(cp_sizes, sizes, vpatterns.size() * sizeof(int)); 
+    
+    
+    
+    // cudaMalloc((void**)&dpatterns, len * sizeof(char));
+    
+    for(int i = 0; i < vpatterns.size(); i++){
+        cudaMemcpyToSymbol(mpatterns,vpatterns[i].c_str(),vpatterns[i].size(),loffset);
+        loffset += sizes[i];
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    
+    //nochunk only
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+    am::timer time;
+    std::cout << "running ..." << "\n";
+    time.start();
+
+    grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    gsqrt = (int)sqrt(grid_size) + 1;
+    dim3 grid(gsqrt,gsqrt);
+    match_multy_const<<<grid,block>>>(vpatterns.size(),dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
+    time.stop();
+
+    
+    delete[](sizes);
+    
+    
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    // cudaFree(dpatterns);
+    // cudaFree(dsizes);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);
+}
+
+void match_naive(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,int verbose){ //nochunk == 0 => nochunk
 
     auto pattern_size = pattern.size();
     
@@ -551,8 +640,10 @@ void match_naive(std::string pattern, std::string subject_string_filename, int n
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
     cudaFree(dpattern);
@@ -561,12 +652,7 @@ void match_naive(std::string pattern, std::string subject_string_filename, int n
 
 
 
-void match_naive_shared(std::string pattern, std::string subject_string_filename, long nochunk,long size, int offset){ //nochunk == 0 => nochunk
-
-    if (pattern.size() > 128) {
-        std::cout << "pattern should be less then or eq 128 bytes\n";
-        return;
-    }
+void match_naive_shared(std::string pattern, std::string subject_string_filename, long nochunk,long size, int offset,int verbose){ //nochunk == 0 => nochunk
 
     char* dtextptr;
     long text_size;
@@ -610,8 +696,10 @@ void match_naive_shared(std::string pattern, std::string subject_string_filename
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;    
 
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
     cudaFree(dpattern);
@@ -619,7 +707,7 @@ void match_naive_shared(std::string pattern, std::string subject_string_filename
 }
 
 
-void match_kmp(std::string pattern, std::string subject_string_filename, int nochunk,long size,long offset){ //nochunk == 0 => nochunk
+void match_kmp(std::string pattern, std::string subject_string_filename, int nochunk,long size,long offset,int verbose){ //nochunk == 0 => nochunk
 
     auto pattern_size = pattern.size();
     
@@ -673,8 +761,9 @@ void match_kmp(std::string pattern, std::string subject_string_filename, int noc
     }
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
     
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
@@ -683,7 +772,7 @@ void match_kmp(std::string pattern, std::string subject_string_filename, int noc
 }
 
 
-__constant__ char c_pattern[128]; //might be as fast as registers, but not in this case =)
+__constant__ char c_pattern[128*64]; //might be as fast as registers, but not in this case =)
 
 __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
 
@@ -695,7 +784,7 @@ __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, 
     if(left_bound < text_size){
         for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
-            result_buf[left_bound + i] = '0';
+            result_buf[left_bound + i] = 0;
             int matched = 1;
 
             for(int j = 0; j < pattern_size; j++) {
@@ -707,7 +796,7 @@ __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, 
             }
 
             if(matched == 1) {
-                result_buf[left_bound + i] = '1';
+                result_buf[left_bound + i] = 1;
             }
         }
                              
@@ -720,7 +809,7 @@ __global__ void match_const(int pattern_size, char* text, long text_size, char* 
 
     if(t_id < text_size){
         int matched = 1;
-        result_buf[t_id] = '0';
+        result_buf[t_id] = 0;
         if(t_id < text_size - pattern_size + 1){
 
             for(int i = 0; i < pattern_size; i++) {
@@ -730,7 +819,7 @@ __global__ void match_const(int pattern_size, char* text, long text_size, char* 
                 }
             }
             if(matched == 1) {
-                result_buf[t_id] = '1';
+                result_buf[t_id] = 1;
             }             
         }
                      
@@ -738,7 +827,7 @@ __global__ void match_const(int pattern_size, char* text, long text_size, char* 
     }
 }
 
-__constant__ int c_prefix[128];
+__constant__ int c_prefix[128*64];
 
 __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char* result_buf,int chunk){
     
@@ -752,7 +841,7 @@ __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char
     for(long i = left_bound; i < right_bound; i++){
         
         if (i < left_bound + chunk) {
-            result_buf[i] = '0';
+            result_buf[i] = 0;
         }
 
         while(ams > 0 && c_pattern[ams] != text[i]){
@@ -763,7 +852,7 @@ __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char
             ams += 1;
         }
         if(ams == pattern_size) {
-            result_buf[i-pattern_size + 1] = '1';
+            result_buf[i-pattern_size + 1] = 1;
             ams = c_prefix[ams-1];
         }
 
@@ -771,12 +860,8 @@ __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char
     }
 }
 
-void match_naive_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset){
+void match_naive_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset,int verbose){
     
-    if (pattern.size() > 128) {
-        std::cout << "pattern should be less then or eq 128 bytes\n";
-        return;
-    }
 
     auto pattern_size = pattern.size(); // <= 128
     cudaMemcpyToSymbol(c_pattern,(void*)pattern.c_str(),pattern.size()*sizeof(char));
@@ -825,18 +910,14 @@ void match_naive_const(std::string pattern, std::string subject_string_filename,
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
 }
 
-void match_kmp_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset){
-    
-    if (pattern.size() > 128) {
-        std::cout << "pattern should be less then or eq 128 bytes\n";
-        return;
-    }
+void match_kmp_const(std::string pattern, std::string subject_string_filename, int nochunk,long size, long offset,int verbose){
 
     auto pattern_size = pattern.size(); // <= 128
     cudaMemcpyToSymbol(c_pattern,(void*)pattern.c_str(),pattern.size()*sizeof(char));
@@ -885,8 +966,10 @@ void match_kmp_const(std::string pattern, std::string subject_string_filename, i
 
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
 
-    write_from_device(&dresult_buf,text_size);
-    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
 }
@@ -897,6 +980,7 @@ int main(int argc, char** argv) {
     long size = 0;
     long offset = 0;
     int type = 0;
+    int verbose = 1;
     
     cxxopts::Options options("as", " - example command line options");
 
@@ -905,39 +989,51 @@ int main(int argc, char** argv) {
                          ("s,size", "size of data to read",cxxopts::value<long>(size)->default_value("0"))
                          ("o,offset", "offset of data to read",cxxopts::value<long>(offset)->default_value("0"))
                          ("a,algorithm","algorithm to look for with",cxxopts::value<std::string>())
-                         ("t,type","type of algorithm: 0 stands for nochunk-based and 1 for chunk-based",cxxopts::value<int>(type));
+                         ("t,type","type of algorithm: 0 stands for nochunk-based and 1 for chunk-based",cxxopts::value<int>(type))
+                         ("v,verbose","print result or not 0 stands for 'No' 1 for 'Yes'",cxxopts::value<int>(verbose));
     // std::string subject_string_filename("data/subject.txt");
 
     auto result = options.parse(argc, argv);
 
-    if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename")){
+    if(result.count("algorithm") && result.count("type") && result.count("pattern") && result.count("filename") && result.count("verbose")){
         auto alg_name = result["algorithm"].as<std::string>();
         auto filename = result["filename"].as<std::string>();
+        //patterns are separated with \x00
         auto patterns = read_pattern(result["pattern"].as<std::string>());
         std::string pattern; 
         if(patterns.size() == 1){
             pattern = patterns[0];
-        }else{
-            std::cout << "bad patterns" << "\n";
-            return 0;
-        } //if contains \x00 --- considered empty
-        if(type == 1 || type == 0){
-            if(alg_name == "naive"){
-                match_naive(pattern,filename,type,size,offset);
-            }else if(alg_name == "naivec"){
-                match_naive_const(pattern,filename,type,size,offset);
-            }else if(alg_name == "naivesh"){
-                match_naive_shared(pattern,filename,type,size,offset);
-            }else if(alg_name == "kmp"){
-                match_kmp_const(pattern,filename,0,size,offset);
+ //if contains \x00 --- considered empty
+            if(type == 1 || type == 0){
+                if(alg_name == "naive"){
+                    match_naive(pattern,filename,type,size,offset,verbose);
+                }else if(alg_name == "naivec"){
+                    match_naive_const(pattern,filename,type,size,offset,verbose);
+                }else if(alg_name == "naivesh"){
+                    match_naive_shared(pattern,filename,type,size,offset,verbose);
+                }else if(alg_name == "kmpc"){
+                    match_kmp_const(pattern,filename,0,size,offset,verbose);
+                }else if(alg_name == "kmp"){
+                    match_kmp(pattern,filename,0,size,offset,verbose);
+                }
+            }else{
+                std::cout << "type should be either 1 or 0" << "\n";
+            }
+        }else if(patterns.size() > 1){
+            if(type == 1 || type == 0){
+                if(alg_name == "mnaive"){
+                    multipattern_match(patterns, filename, size, offset, verbose);
+                    
+                }else if(alg_name == "mnaivec"){
+                    multipattern_match_const(patterns, filename, size, offset, verbose);
+                }
             }
         }else{
-            std::cout << pattern << " " << pattern.size() << "\n";
-            std::cout << "type should be either 1 or 0" << "\n";
+            std::cout << "bad patterns" << "\n";
         }
     }else{
         std::cout << "algorithm name shoud be specified with --algorithm=name and type with --type=type" << "\n";
-    }    
+        }    
 
     return 0;
 }

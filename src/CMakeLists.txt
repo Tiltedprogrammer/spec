@@ -5,6 +5,15 @@ set_source_files_properties(${FUN_INCLUDE_FILE} PROPERTIES GENERATED TRUE)
 anydsl_runtime_wrap(NON_JIT_MATCH
     FILES non_jit.impala)
 
+if(BLOCK_SIZE)
+    message("-- BLOCK_SIZE=${BLOCK_SIZE}")
+    add_definitions(-DBLOCK_SIZE=${BLOCK_SIZE})
+else()
+    message("-- Using default BLOCK_SIZE which is 1024")
+    add_definitions(-DBLOCK_SIZE=512)    
+endif()
+
 add_executable(fun main.cu ${FUN_INCLUDE_FILE} ${NON_JIT_MATCH})
+add_executable(clean.out test.cu)
 target_include_directories(fun PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS})
 target_link_libraries(fun ${AnyDSL_runtime_LIBRARIES})
