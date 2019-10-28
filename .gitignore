@@ -6,6 +6,7 @@ fo
 test/data/subject.txt
 test/data/pattern.txt
 test/*
+!test/check_time_sda2
 !test/docker
 !test/*.ipynb
 *.code-workspace
