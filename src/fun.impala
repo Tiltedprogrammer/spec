@@ -476,7 +476,7 @@ fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8,
 }
 //think about unroll
 
-fn match_internal(@t : &[u8],@start : i32,@end : i32,id :u8, t_id : i64, i:i32,ibuffer : &[u8],result_buf:  &mut[u8]) -> () {
+fn match_internal(@?t : &[u8],@?start : i32,@?end : i32,id :u8, t_id : i64, i:i32,ibuffer : &[u8],result_buf:  &mut[u8]) -> () {
                         
             if start == end {
                 result_buf(t_id) = id;
@@ -507,6 +507,46 @@ fn match_internal(@t : &[u8],@start : i32,@end : i32,id :u8, t_id : i64, i:i32,i
 */
 
 fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32) -> (){
+    
+    let block = (block_size,1,1); //1024
+    let math = cpu_intrinsics;
+                //can be p'ed;
+    let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+    let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                //g x g blocks;
+    let grid = (g * block(0),g,1);
+
+    with cuda(0,grid,block){
+        
+        let t_id : i64 = threadId();
+
+        if t_id < ibuffer_size {
+            
+            result_buf(t_id) = 0u8;
+            let mut start = 0;
+
+            for i in unroll(0,t_num as i32){
+                match_internal(template,start,start + t_sizes(i),i as u8 + 1u8,t_id,0,ibuffer,result_buf);
+                start = start + t_sizes(i);
+            }
+            /*for i in unroll(0,t_num as i32){ //for each pattern
+                let mut matched = 1;
+                for j in unroll(0,t_sizes(i)){
+                    if ibuffer(t_id + j as i64) != template(i)(j){
+                        matched = -1;
+                        break()
+                    }
+                }
+                if matched == 1 {
+                    result_buf(t_id) = i as u8 + 1u8;
+                }
+            }*/
+        }
+    }
+
+}
+
+fn string_match_multiple_nope(template : &[u8],t_sizes : &[i32], t_num : u8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32) -> (){
     
     let block = (block_size,1,1); //1024
     let math = cpu_intrinsics;

@@ -20,6 +20,7 @@
 #define block_size BLOCK_SIZE
 
 extern "C" void string_match_nope(const char*,int,short int,char*,long,char*,int,int,int);
+extern "C" void string_match_multiple(const char *, const int *,short,const char*, long,char *,int);
 // extern "C" void match_kmp(const char*,int,short int,char*,long,char*,int,int,int);
 
 
@@ -316,6 +317,98 @@ void prefix_f(std::string pattern, int index){
 
 }
 
+void multipattern_match(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose){
+
+    int* sizes = new int[vpatterns.size()];
+
+    int len = 0;
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].size();
+        len += sizes[i];    
+    }
+    
+    int loffset = 0;
+
+    char* dpatterns;
+    int* dsizes;
+
+    char* dtextptr;
+    long text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
+    
+    cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
+    cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
+    
+    cudaMalloc((void**)&dpatterns, len * sizeof(char));
+    
+    for(int i = 0; i < vpatterns.size(); i++){
+        cudaMemcpy((void*)(dpatterns + loffset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
+        loffset += sizes[i];
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+
+    std::string dummy_fun;
+
+    //maybe asyncronous read from disk and jit;
+    dummy_fun += "extern fn dummy(patterns : &[u8], sizes : &[i32], size : u8, text : &[u8], text_size : i64, result_buf : &mut[u8],block_size : i32) -> (){\n";
+
+    dummy_fun += "  string_match_multiple_nope(patterns, sizes,size,text,text_size,result_buf,block_size);}"; //;
+    
+
+    std::string program = std::string((char*)fun_impala) + dummy_fun;
+
+    std::cout << "compiling ... " << std::flush;
+    am::timer time;
+    time.start();
+
+    auto key = anydsl_compile(program.c_str(),program.size(),0);
+    time.stop();
+    std::cout << "compilation time " << time.milliseconds() << std::endl;
+    time.reset();
+    typedef void (*function) (const char*,const int*,short,const char*, long, const char *,int);
+    auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
+    
+    if (call == nullptr) {
+        std::cout << "compiliacion failed\n";
+        return;
+    } else {
+        std::cout << "succesfully compiled\n";
+    }
+
+    std::cout << "\n";
+
+
+    std::cout << "running ..." << "\n";
+    time.start();
+    call(dpatterns,dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf,block_size);
+    cudaDeviceSynchronize();
+    time.stop();
+
+    
+    delete[](sizes);
+    
+    
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    cudaFree(dpatterns);
+    cudaFree(dsizes);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);  
+}
+
 void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::string subject_string_filename, long size, long offset, int verbose) {
     
     std::string sizes;
@@ -349,9 +442,12 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
 
     std::cout << "compiling ... " << std::flush;
     am::timer time;
-    // time.start();
+    time.start();
 
     auto key = anydsl_compile(program.c_str(),program.size(),0);
+    time.stop();
+    std::cout << "compilation time " << time.milliseconds() << std::endl;
+    time.reset();
     typedef void (*function) (const char*, long, const char *);
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
@@ -527,6 +623,8 @@ int main(int argc, char** argv) {
                 match_pe(filename,size,offset,match_naive_nochunk,verbose);
             }else if(alg_name == "mcleanpe"){
                 match_pe_pointer_multipattern(patterns,filename,size,offset,verbose);
+            }else if(alg_name == "mcleannope"){
+                multipattern_match(patterns,filename,size,offset,verbose);
             }else{
                 std::cout << "no such algorithm" << "\n";
             }
