@@ -1,7 +1,15 @@
 pats = ["he","she","his","hers"]
 
+-- Example:
+-- *Main> loop pats [] "shershe" []
+-- ["she","he","hers","she","he"]
+-- *Main> loop2 pats [] "shershe" []
+-- ["she","he","hers","she","he"]
+
+
 
 -- check whether s' is strict prefix of p
+rest :: [Char] -> [Char] -> Maybe [Char]
 rest [] s' = Nothing
 rest p' [] = Just p'
 rest p' s' 
