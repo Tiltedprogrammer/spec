@@ -1,0 +1,5 @@
+{-data List a = Nil | Cons a (List a)-}
+
+data Char' = A | B
+
+--data Maybe a = Just a | Nothing

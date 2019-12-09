@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "/home/gerwant/anydsl/anydsl/runtime/src"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.cu": "cpp",
+			"*.impala": "rust",
+			"*.inc": "cpp",
+			"regex": "cpp",
+			"array": "cpp",
+			"string_view": "cpp",
+			"bitset": "cpp",
+			"initializer_list": "cpp",
+			"utility": "cpp"
+		}
+	}
+}

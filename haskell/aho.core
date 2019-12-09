@@ -1,0 +1,102 @@
+-- list constructor doesn't work []
+
+eq a b = case a of
+    A -> case b of
+        A -> True
+        _ -> False
+    B -> case b of
+        B -> True
+        _ -> False
+
+eql ys xs = case ys of
+    [] -> case xs of
+        [] -> True
+        _   -> False
+    (u:us) -> case xs of
+        [] -> False
+        (w:ws) -> if eq u w then eql us ws
+                     else False
+        _ -> False
+
+last xs = case xs of
+            (y:ys) -> case ys of
+                            []  -> y
+                            _    -> last ys
+
+init xs = case xs of
+            (u:us) -> case us of
+                            [] -> []
+                            _   ->  (:) u (init us)
+
+head xs = case xs of
+    (y:ys) -> y
+
+tail xs = case xs of
+    (y:ys) -> ys
+
+append xs ys = case xs of
+    [] -> ys
+    (u:us) -> (:) u (append us ys)
+
+rest p s = case p of
+    [] -> Nothing
+    _  -> case s of
+        [] -> Just p
+        _  -> if eq (head p) (head s) then rest (tail p) (tail s)
+              else Nothing
+
+-- for all s run ams
+ams p s a = case p of 
+              [] -> []
+              _   -> let np = rest (head p) s in
+                case np of
+                    Nothing -> ams (tail p) s a
+                    Just xs -> case xs of
+                            (u:us) -> if eq u a then append s ([u]) --trick from Jones: append u instead of a
+                                        else ams (tail p) s a 
+
+{-pats = let he = (Cons H (Cons E Nil))
+           she = (Cons S (Cons H (Cons E Nil)))
+           his = (Cons H (Cons I (Cons S Nil)))
+           hers = (Cons H (Cons E (Cons R (Cons S Nil)))) in
+           Cons he (Cons she (Cons his (Cons hers Nil)))-}
+-- her = (Cons H (Cons E (Cons R Nil)))
+-- her' = (Cons H (Cons E (Cons R Nil)))
+
+failf p s = case (tail s) of
+                [] -> [] -- (eql tail s  Nil) then Nil
+                _   -> let ns = failf p (init s) --failf for previous ams
+                           nsl = ams p ns (last s)   
+                        in if eql nsl  [] then 
+                            if eql ns [] then [] -- have gone down to base case
+                            else let f = failf p ns in ams p f (last s) -- go down to failf for prev ams
+                        else nsl
+
+inout p s = case p of
+    [] -> []
+    _   -> if eql (head p) s then (head p)
+           else inout (tail p) s
+
+out p s = case s of
+             [] -> []
+             _  -> let o = (inout p s) in
+                case o of 
+                    (x:xs) -> o : (out p (failf p s))
+                    _      -> (out p (failf p s))
+
+
+loop p s t o = case t of 
+                    [] -> o
+                    _   -> let ns = ams p s (head t) in
+                            case ns of 
+                             (x:xs) -> loop p ns (tail t) (append o (out p ns))
+                             _          -> case s of
+                                             [] -> loop p [] (tail t) o
+                                             _   -> loop p (failf p s) t o 
+
+-- root = loop pats Nil (Cons S (Cons H (Cons E (Cons R (Cons S (Cons H (Cons E Nil))))))) Nil
+
+--if pats are more then 1 timeout :(
+pats = [[A],[B]]
+root = loop pats [] [A,B,A,A] []
+tests = [(1,1)]

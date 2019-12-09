@@ -29,7 +29,7 @@ ams p s a
 
 --inductively searches prefix-suffix
 failf :: [[Char]] -> [Char] -> [Char]
-failf p s 
+{-failf p s 
     | tail s == [] = [] -- base, i.e. fail for ams of length 1 is root
     | otherwise = let ns = failf p (init s) --failf for previous ams
                       nsl = ams p ns (last s)   
@@ -37,8 +37,15 @@ failf p s
                             if ns == [] then [] -- have gone down to base case
                             else ams p (failf p ns) (last s) -- go down to failf for prev ams
                         else nsl
-
---gather matches for ams among all patterns
+-}
+failf p s = if (tail s == []) then []
+            else  let ns = failf p (init s) --failf for previous ams
+                      nsl = ams p ns (last s)   
+                in if nsl == [] then 
+                    if ns == [] then [] -- have gone down to base case
+                    else ams p (failf p ns) (last s) -- go down to failf for prev ams
+                   else nsl
+                        --gather matches for ams among all patterns
 out :: [[Char]] -> [Char] -> [[Char]]
 out p s 
     | s == [] = []
