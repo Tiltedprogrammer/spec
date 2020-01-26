@@ -1,0 +1,145 @@
+; ModuleID = 'jit'
+source_filename = "jit"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define void @dummy([0 x i8]* %text_11927, i32 %text_size_11928, [0 x i32]* %result_buf_11929) {
+dummy_start:
+  br label %dummy
+
+dummy:                                            ; preds = %dummy_start
+  br label %compare
+
+compare:                                          ; preds = %expr_false20, %expr_false17, %expr_false11, %expr_false8, %dummy
+  %text_index = phi i32 [ %26, %expr_false17 ], [ %9, %expr_false8 ], [ %31, %expr_false20 ], [ %14, %expr_false11 ], [ 0, %dummy ]
+  br label %compare1
+
+compare1:                                         ; preds = %expr_true21, %expr_false14, %expr_false5, %expr_false3, %compare
+  %text_index2 = phi i32 [ %36, %expr_true21 ], [ %2, %expr_false3 ], [ %text_index, %compare ], [ %2, %expr_false5 ], [ %19, %expr_false14 ]
+  %0 = icmp eq i32 %text_index2, %text_size_11928
+  br i1 %0, label %expr_true28, label %expr_false
+
+expr_false:                                       ; preds = %compare1
+  %1 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %text_index2
+  %2 = add nsw i32 1, %text_index2
+  %3 = load i8, i8* %1, align 1
+  %4 = icmp eq i8 %3, 97
+  br i1 %4, label %expr_true, label %expr_false3
+
+expr_false3:                                      ; preds = %expr_false
+  br label %compare1
+
+expr_true:                                        ; preds = %expr_false
+  %5 = icmp eq i32 %2, %text_size_11928
+  br i1 %5, label %expr_true27, label %expr_false4
+
+expr_false4:                                      ; preds = %expr_true
+  %6 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %2
+  %7 = load i8, i8* %6, align 1
+  %8 = icmp eq i8 %7, 98
+  br i1 %8, label %expr_true6, label %expr_false5
+
+expr_false5:                                      ; preds = %expr_false4
+  br label %compare1
+
+expr_true6:                                       ; preds = %expr_false4
+  %9 = add nsw i32 2, %text_index2
+  %10 = icmp eq i32 %9, %text_size_11928
+  br i1 %10, label %expr_true26, label %expr_false7
+
+expr_false7:                                      ; preds = %expr_true6
+  %11 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %9
+  %12 = load i8, i8* %11, align 1
+  %13 = icmp eq i8 %12, 98
+  br i1 %13, label %expr_true9, label %expr_false8
+
+expr_false8:                                      ; preds = %expr_false7
+  br label %compare
+
+expr_true9:                                       ; preds = %expr_false7
+  %14 = add nsw i32 3, %text_index2
+  %15 = icmp eq i32 %14, %text_size_11928
+  br i1 %15, label %expr_true25, label %expr_false10
+
+expr_false10:                                     ; preds = %expr_true9
+  %16 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %14
+  %17 = load i8, i8* %16, align 1
+  %18 = icmp eq i8 %17, 97
+  br i1 %18, label %expr_true12, label %expr_false11
+
+expr_false11:                                     ; preds = %expr_false10
+  br label %compare
+
+expr_true12:                                      ; preds = %expr_false10
+  %19 = add nsw i32 4, %text_index2
+  %20 = icmp eq i32 %19, %text_size_11928
+  %21 = sub nsw i32 %19, 4
+  %22 = getelementptr inbounds [0 x i32], [0 x i32]* %result_buf_11929, i64 0, i32 %21
+  store i32 1, i32* %22, align 4
+  br i1 %20, label %expr_true24, label %expr_false13
+
+expr_false13:                                     ; preds = %expr_true12
+  %23 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %19
+  %24 = load i8, i8* %23, align 1
+  %25 = icmp eq i8 %24, 98
+  br i1 %25, label %expr_true15, label %expr_false14
+
+expr_false14:                                     ; preds = %expr_false13
+  br label %compare1
+
+expr_true15:                                      ; preds = %expr_false13
+  %26 = add nsw i32 5, %text_index2
+  %27 = icmp eq i32 %26, %text_size_11928
+  br i1 %27, label %expr_true23, label %expr_false16
+
+expr_false16:                                     ; preds = %expr_true15
+  %28 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %26
+  %29 = load i8, i8* %28, align 1
+  %30 = icmp eq i8 %29, 98
+  br i1 %30, label %expr_true18, label %expr_false17
+
+expr_false17:                                     ; preds = %expr_false16
+  br label %compare
+
+expr_true18:                                      ; preds = %expr_false16
+  %31 = add nsw i32 6, %text_index2
+  %32 = icmp eq i32 %31, %text_size_11928
+  br i1 %32, label %expr_true22, label %expr_false19
+
+expr_false19:                                     ; preds = %expr_true18
+  %33 = getelementptr inbounds [0 x i8], [0 x i8]* %text_11927, i64 0, i32 %31
+  %34 = load i8, i8* %33, align 1
+  %35 = icmp eq i8 %34, 97
+  br i1 %35, label %expr_true21, label %expr_false20
+
+expr_false20:                                     ; preds = %expr_false19
+  br label %compare
+
+expr_true21:                                      ; preds = %expr_false19
+  %36 = add nsw i32 7, %text_index2
+  %37 = sub nsw i32 %36, 4
+  %38 = getelementptr inbounds [0 x i32], [0 x i32]* %result_buf_11929, i64 0, i32 %37
+  store i32 1, i32* %38, align 4
+  br label %compare1
+
+expr_true22:                                      ; preds = %expr_true18
+  ret void
+
+expr_true23:                                      ; preds = %expr_true15
+  ret void
+
+expr_true24:                                      ; preds = %expr_true12
+  ret void
+
+expr_true25:                                      ; preds = %expr_true9
+  ret void
+
+expr_true26:                                      ; preds = %expr_true6
+  ret void
+
+expr_true27:                                      ; preds = %expr_true
+  ret void
+
+expr_true28:                                      ; preds = %compare1
+  ret void
+}

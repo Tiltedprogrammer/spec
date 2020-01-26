@@ -1,0 +1,270 @@
+; ModuleID = 'jit'
+source_filename = "jit"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define void @dummy([0 x i8]* %text_13774, i32 %text_size_13775, [0 x i32]* %result_buf_13776) {
+dummy_start:
+  br label %dummy
+
+dummy:                                            ; preds = %dummy_start
+  call void @compare_13778([0 x i8]* %text_13774, i32 %text_size_13775, [0 x i32]* %result_buf_13776, i32 0)
+  br label %return
+
+return:                                           ; preds = %dummy
+  ret void
+}
+
+define internal void @compare_13778([0 x i8]* %ibuffer_13780, i32 %ibuffer_size_13781, [0 x i32]* %result_buf_13782, i32 %text_index_13783) {
+compare_13778_start:
+  br label %compare
+
+compare:                                          ; preds = %compare_13778_start
+  br label %compare1
+
+compare1:                                         ; preds = %expr_false4, %expr_false2, %compare
+  %text_index = phi i32 [ %2, %expr_false4 ], [ %2, %expr_false2 ], [ %text_index_13783, %compare ]
+  %0 = icmp eq i32 %text_index, %ibuffer_size_13781
+  br i1 %0, label %expr_true7, label %expr_false
+
+expr_false:                                       ; preds = %compare1
+  %1 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13780, i64 0, i32 %text_index
+  %2 = add nsw i32 1, %text_index
+  %3 = load i8, i8* %1, align 1
+  %4 = icmp eq i8 %3, 97
+  br i1 %4, label %expr_true, label %expr_false2
+
+expr_false2:                                      ; preds = %expr_false
+  br label %compare1
+
+expr_true:                                        ; preds = %expr_false
+  %5 = icmp eq i32 %2, %ibuffer_size_13781
+  br i1 %5, label %expr_true6, label %expr_false3
+
+expr_false3:                                      ; preds = %expr_true
+  %6 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13780, i64 0, i32 %2
+  %7 = load i8, i8* %6, align 1
+  %8 = icmp eq i8 %7, 98
+  br i1 %8, label %expr_true5, label %expr_false4
+
+expr_false4:                                      ; preds = %expr_false3
+  br label %compare1
+
+expr_true5:                                       ; preds = %expr_false3
+  %9 = add nsw i32 2, %text_index
+  call void @compare_13811([0 x i8]* %ibuffer_13780, i32 %ibuffer_size_13781, [0 x i32]* %result_buf_13782, i32 %9)
+  br label %return
+
+return:                                           ; preds = %expr_true5
+  ret void
+
+expr_true6:                                       ; preds = %expr_true
+  ret void
+
+expr_true7:                                       ; preds = %compare1
+  ret void
+}
+
+define internal void @compare_13811([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %text_index_13816) {
+compare_13811_start:
+  br label %compare
+
+compare:                                          ; preds = %compare_13811_start
+  br label %compare1
+
+compare1:                                         ; preds = %expr_true25, %compare
+  %text_index = phi i32 [ %15, %expr_true25 ], [ %text_index_13816, %compare ]
+  br label %compare2
+
+compare2:                                         ; preds = %expr_true9, %compare1
+  %text_index3 = phi i32 [ %2, %expr_true9 ], [ %text_index, %compare1 ]
+  %0 = icmp eq i32 %text_index3, %ibuffer_size_13814
+  br i1 %0, label %expr_true35, label %expr_false
+
+expr_false:                                       ; preds = %compare2
+  %1 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13813, i64 0, i32 %text_index3
+  %2 = add nsw i32 2, %text_index3
+  %3 = add nsw i32 1, %text_index3
+  %4 = load i8, i8* %1, align 1
+  %5 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13813, i64 0, i32 %3
+  %6 = icmp eq i32 %3, %ibuffer_size_13814
+  %7 = icmp eq i8 %4, 97
+  br i1 %7, label %expr_true12, label %expr_false4
+
+expr_false4:                                      ; preds = %expr_false
+  br i1 %0, label %expr_true11, label %expr_false5
+
+expr_false5:                                      ; preds = %expr_false4
+  %8 = load i8, i8* %1, align 1
+  %9 = icmp eq i8 %8, 97
+  br i1 %9, label %expr_true, label %expr_false6
+
+expr_false6:                                      ; preds = %expr_false5
+  call void @compare_13778([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %3)
+  br label %return
+
+expr_true:                                        ; preds = %expr_false5
+  br i1 %6, label %expr_true10, label %expr_false7
+
+expr_false7:                                      ; preds = %expr_true
+  %10 = load i8, i8* %5, align 1
+  %11 = icmp eq i8 %10, 98
+  br i1 %11, label %expr_true9, label %expr_false8
+
+expr_false8:                                      ; preds = %expr_false7
+  call void @compare_13778([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %3)
+  br label %return
+
+expr_true9:                                       ; preds = %expr_false7
+  br label %compare2
+
+expr_true10:                                      ; preds = %expr_true
+  ret void
+
+expr_true11:                                      ; preds = %expr_false4
+  ret void
+
+expr_true12:                                      ; preds = %expr_false
+  br i1 %6, label %expr_true34, label %expr_false13
+
+expr_false13:                                     ; preds = %expr_true12
+  %12 = load i8, i8* %5, align 1
+  %13 = icmp eq i8 %12, 98
+  br i1 %13, label %expr_true15, label %expr_false14
+
+expr_false14:                                     ; preds = %expr_false13
+  call void @compare_13871([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %3)
+  br label %return
+
+expr_true15:                                      ; preds = %expr_false13
+  br label %compare16
+
+compare16:                                        ; preds = %expr_true31, %expr_true15
+  %text_index17 = phi i32 [ %15, %expr_true31 ], [ %2, %expr_true15 ]
+  %14 = icmp eq i32 %text_index17, %ibuffer_size_13814
+  br i1 %14, label %expr_true33, label %expr_false18
+
+expr_false18:                                     ; preds = %compare16
+  %15 = add nsw i32 2, %text_index17
+  %16 = add nsw i32 1, %text_index17
+  %17 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13813, i64 0, i32 %16
+  %18 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13813, i64 0, i32 %text_index17
+  %19 = icmp eq i32 %16, %ibuffer_size_13814
+  %20 = load i8, i8* %18, align 1
+  %21 = icmp eq i8 %20, 97
+  br i1 %21, label %expr_true28, label %expr_false19
+
+expr_false19:                                     ; preds = %expr_false18
+  br i1 %14, label %expr_true27, label %expr_false20
+
+expr_false20:                                     ; preds = %expr_false19
+  %22 = load i8, i8* %18, align 1
+  %23 = icmp eq i8 %22, 97
+  br i1 %23, label %expr_true22, label %expr_false21
+
+expr_false21:                                     ; preds = %expr_false20
+  call void @compare_13778([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %16)
+  br label %return
+
+expr_true22:                                      ; preds = %expr_false20
+  br i1 %19, label %expr_true26, label %expr_false23
+
+expr_false23:                                     ; preds = %expr_true22
+  %24 = load i8, i8* %17, align 1
+  %25 = icmp eq i8 %24, 98
+  br i1 %25, label %expr_true25, label %expr_false24
+
+expr_false24:                                     ; preds = %expr_false23
+  call void @compare_13778([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %16)
+  br label %return
+
+expr_true25:                                      ; preds = %expr_false23
+  br label %compare1
+
+expr_true26:                                      ; preds = %expr_true22
+  ret void
+
+expr_true27:                                      ; preds = %expr_false19
+  ret void
+
+expr_true28:                                      ; preds = %expr_false18
+  %26 = sub nsw i32 %16, 5
+  %27 = getelementptr inbounds [0 x i32], [0 x i32]* %result_buf_13815, i64 0, i32 %26
+  store i32 1, i32* %27, align 4
+  br i1 %19, label %expr_true32, label %expr_false29
+
+expr_false29:                                     ; preds = %expr_true28
+  %28 = load i8, i8* %17, align 1
+  %29 = icmp eq i8 %28, 98
+  br i1 %29, label %expr_true31, label %expr_false30
+
+expr_false30:                                     ; preds = %expr_false29
+  call void @compare_13871([0 x i8]* %ibuffer_13813, i32 %ibuffer_size_13814, [0 x i32]* %result_buf_13815, i32 %16)
+  br label %return
+
+return:                                           ; preds = %expr_false30, %expr_false24, %expr_false21, %expr_false14, %expr_false8, %expr_false6
+  ret void
+
+expr_true31:                                      ; preds = %expr_false29
+  br label %compare16
+
+expr_true32:                                      ; preds = %expr_true28
+  ret void
+
+expr_true33:                                      ; preds = %compare16
+  ret void
+
+expr_true34:                                      ; preds = %expr_true12
+  ret void
+
+expr_true35:                                      ; preds = %compare2
+  ret void
+}
+
+define internal void @compare_13871([0 x i8]* %ibuffer_13873, i32 %ibuffer_size_13874, [0 x i32]* %result_buf_13875, i32 %text_index_13876) {
+compare_13871_start:
+  br label %compare
+
+compare:                                          ; preds = %compare_13871_start
+  %0 = icmp eq i32 %text_index_13876, %ibuffer_size_13874
+  br i1 %0, label %expr_true6, label %expr_false
+
+expr_false:                                       ; preds = %compare
+  %1 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13873, i64 0, i32 %text_index_13876
+  %2 = load i8, i8* %1, align 1
+  %3 = add nsw i32 1, %text_index_13876
+  %4 = icmp eq i8 %2, 97
+  br i1 %4, label %expr_true, label %expr_false1
+
+expr_false1:                                      ; preds = %expr_false
+  call void @compare_13778([0 x i8]* %ibuffer_13873, i32 %ibuffer_size_13874, [0 x i32]* %result_buf_13875, i32 %3)
+  br label %return
+
+expr_true:                                        ; preds = %expr_false
+  %5 = icmp eq i32 %3, %ibuffer_size_13874
+  br i1 %5, label %expr_true5, label %expr_false2
+
+expr_false2:                                      ; preds = %expr_true
+  %6 = getelementptr inbounds [0 x i8], [0 x i8]* %ibuffer_13873, i64 0, i32 %3
+  %7 = load i8, i8* %6, align 1
+  %8 = icmp eq i8 %7, 98
+  br i1 %8, label %expr_true4, label %expr_false3
+
+expr_false3:                                      ; preds = %expr_false2
+  call void @compare_13778([0 x i8]* %ibuffer_13873, i32 %ibuffer_size_13874, [0 x i32]* %result_buf_13875, i32 %3)
+  br label %return
+
+expr_true4:                                       ; preds = %expr_false2
+  %9 = add nsw i32 2, %text_index_13876
+  call void @compare_13811([0 x i8]* %ibuffer_13873, i32 %ibuffer_size_13874, [0 x i32]* %result_buf_13875, i32 %9)
+  br label %return
+
+return:                                           ; preds = %expr_true4, %expr_false3, %expr_false1
+  ret void
+
+expr_true5:                                       ; preds = %expr_true
+  ret void
+
+expr_true6:                                       ; preds = %compare
+  ret void
+}
