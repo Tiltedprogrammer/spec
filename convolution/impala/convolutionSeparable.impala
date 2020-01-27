@@ -1,0 +1,100 @@
+
+fn rowConvolutionFilter(
+    d_Src : &[f32],
+    d_Dst : &mut[f32],
+    @kernel : &[f32],
+    @kernel_radius : i32,
+    @imageH : i32, 
+    @imageW:i32, 
+    @pitch : i32,
+    @block_sizeX : i32,
+    @block_sizeY : i32,
+    @RESULT_STEP : i32)->(){
+
+    let kernel_length : i32 = kernel_radius * 2 + 1;
+    // let RESULT_STEP = 8;
+    let HALO = 1;
+
+    let sDataWidth = (RESULT_STEP + 2 * HALO) * block_sizeX;
+    //more then a half of the available shared mem
+    let sData = reserve_shared[f32](block_sizeY * (RESULT_STEP + 2 * HALO) * block_sizeX);
+
+    let baseX = cuda_blockIdx_x() * RESULT_STEP * block_sizeX - HALO * block_sizeX + cuda_threadIdx_x();
+    let baseY = cuda_blockIdx_y() * block_sizeY + cuda_threadIdx_y();
+
+    let d_Src_offset = baseY * pitch + baseX;
+    let d_Dst_offset = baseY * pitch + baseX;
+
+    //load main data
+
+    for i in unroll(HALO,HALO+RESULT_STEP){
+
+        sData(cuda_threadIdx_y() * sDataWidth + cuda_threadIdx_x() + i * block_sizeX) = if baseX + i * block_sizeX < imageW {d_Src(d_Src_offset + i * block_sizeX)} else {0.0f32};
+    
+    }
+
+    //load left halo
+
+    for i in unroll(0,HALO){
+
+        sData(cuda_threadIdx_y() * sDataWidth + cuda_threadIdx_x() + i * block_sizeX) = if baseX + i * block_sizeX >= 0 {d_Src(d_Src_offset + i * block_sizeX)} else {0.0f32};
+    
+    }
+
+    //load right halo
+
+    for i in unroll(HALO + RESULT_STEP, HALO + RESULT_STEP + HALO){
+        
+        sData(cuda_threadIdx_y() * sDataWidth + cuda_threadIdx_x() + i * block_sizeX) = if baseX + i * block_sizeX < imageW {d_Src(d_Src_offset + i * block_sizeX)} else {0.0f32};
+
+    }
+
+    cuda_syncthreads();
+
+    if baseY > imageH {
+        return()
+    }
+
+    //convolve
+
+    for i in unroll(HALO, HALO + RESULT_STEP){
+        if baseX + i * block_sizeX < imageW {
+            let mut sum : f32 = 0.0f32;
+
+            for j in unroll(-kernel_radius,kernel_radius + 1){
+                sum = sum + kernel(kernel_radius - j) * sData(cuda_threadIdx_y() * sDataWidth + cuda_threadIdx_x() + i * block_sizeX + j);
+            }
+            d_Dst(d_Dst_offset + i * block_sizeX) = sum;
+        }
+    }
+
+}
+
+fn rowConvolveImpala(d_Src : &[f32],
+    d_Dst : &mut[f32],
+    @kernel : &[f32],
+    @kernel_radius : i32,
+    @imageH : i32, 
+    @imageW:i32, 
+    @pitch : i32,
+    @block_sizeX : i32,
+    @block_sizeY : i32,
+    @RESULT_STEP : i32) -> (){
+
+        let grid_x = (imageW + block_sizeX * RESULT_STEP - 1) / (block_sizeX * RESULT_STEP);
+        let grid_y = (imageH + block_sizeY - 1) / block_sizeY;
+        
+        let threads = (32,32,1);
+        //grid_x * grid_y size
+        let grid = (grid_x * threads(0),grid_y * threads(1),1);
+        //assert(ROWS_BLOCKDIM_X * ROWS_HALO_STEPS >= KERNEL_RADIUS);
+
+        //merge columnt and row filters
+
+        with cuda(0,grid,threads) {
+            rowConvolutionFilter(d_Src,d_Dst,kernel,kernel_radius,imageH,imageW,pitch,block_sizeX,block_sizeY,RESULT_STEP);
+        }
+
+        return()
+        
+    }

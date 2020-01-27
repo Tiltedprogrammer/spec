@@ -46,7 +46,7 @@ __global__ void rowConvolutionFilter(
     
     for (int i = 0; i < ROW_HALO_STEP; i++) {
 
-        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i*ROW_BLOCK_DIM_X) >= 0 ? d_Src[i*ROW_BLOCK_DIM_X] : 0;
+        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i * ROW_BLOCK_DIM_X) >= 0 ? d_Src[i*ROW_BLOCK_DIM_X] : 0;
     }
 
     //load right halo
@@ -54,7 +54,7 @@ __global__ void rowConvolutionFilter(
 
     for (int i = ROW_HALO_STEP + ROW_RESULT_STEP; i < ROW_HALO_STEP + ROW_RESULT_STEP + ROW_HALO_STEP; i++) {
         
-        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i*ROW_BLOCK_DIM_X) < imageW ? d_Src[i * ROW_BLOCK_DIM_X] : 0;
+        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i * ROW_BLOCK_DIM_X) < imageW ? d_Src[i * ROW_BLOCK_DIM_X] : 0;
     
     }
 
@@ -75,7 +75,7 @@ __global__ void rowConvolutionFilter(
 
         #pragma unroll
             
-            for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j ++) {
+            for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
 
                 sum += c_Kernel[KERNEL_RADIUS - j] * sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X + j];    
             

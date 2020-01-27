@@ -7,9 +7,9 @@
 
 #define cimg_use_jpeg
 
-#include "cimg/CImg-2.8.3/CImg.h"
-#include "cpp/convolutionSeparable.hpp"
-#include "cpp/convolutionSeparable_gold.hpp"
+#include "../cimg/CImg-2.8.3/CImg.h"
+#include "convolutionSeparable.hpp"
+#include "convolutionSeparable_gold.hpp"
 
 int main(int argc, char ** argv){
 
