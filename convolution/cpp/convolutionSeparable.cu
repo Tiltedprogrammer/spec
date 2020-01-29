@@ -1,18 +1,12 @@
 #include "convolutionSeparable.hpp"
+#include "defines.hpp"
 
-#define ROW_BLOCK_DIM_X 32
-#define ROW_BLOCK_DIM_Y 32
 
-//how many pixels an individual thread would proccess
-#define ROW_RESULT_STEP 8
-//borders length of size @ROW_BLOCK_DIM to satisfy correct alignment
-#define ROW_HALO_STEP 1
+__constant__ float c_Kernel[256];
 
-__constant__ float c_Kernel[KERNEL_LENGTH];
-
-void setConvolutionKernel(float* h_Kernel)
+void setConvolutionKernel(float* h_Kernel, int k_length)
 {
-    cudaMemcpyToSymbol(c_Kernel, h_Kernel, KERNEL_LENGTH * sizeof(float));
+    cudaMemcpyToSymbol(c_Kernel, h_Kernel, k_length * sizeof(float));
 }
 
 __global__ void rowConvolutionFilter(
@@ -20,41 +14,45 @@ __global__ void rowConvolutionFilter(
     float *d_Src,
     int imageW,
     int imageH,
-    int pitch
+    int pitch,
+    int radius,
+    int blockX,
+    int blockY,
+    int step,
+    int halo
 ){
-    __shared__ float sData[ROW_BLOCK_DIM_Y][(ROW_RESULT_STEP + 2*ROW_HALO_STEP) * ROW_BLOCK_DIM_X];
+    int ROW_BLOCK_DIM_X255 = blockX;
+    int ROW_BLOCK_DIM_Y255 = blockY;
+    extern __shared__ float sData[];
+    int sDataWidth = blockX * (step + 2 * halo);
 
     //offset to left halo edge
-    const int baseX = (blockIdx.x * ROW_RESULT_STEP) * ROW_BLOCK_DIM_X - ROW_HALO_STEP * ROW_BLOCK_DIM_X + threadIdx.x;
-    const int baseY = blockIdx.y * ROW_BLOCK_DIM_Y + threadIdx.y;
+    const int baseX = (blockIdx.x * step) * ROW_BLOCK_DIM_X255 - halo * ROW_BLOCK_DIM_X255 + threadIdx.x;
+    const int baseY = blockIdx.y * ROW_BLOCK_DIM_Y255 + threadIdx.y;
 
     d_Src += baseY * pitch + baseX;
     d_Dst += baseY * pitch + baseX;
     
     //load main data
     
-#pragma unroll
-
-    for (int i = ROW_HALO_STEP; i < ROW_HALO_STEP + ROW_RESULT_STEP; i++) {
+    for (int i = halo; i < halo + step; i++) {
      
-        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i * ROW_BLOCK_DIM_X) < imageW ? d_Src[i*ROW_BLOCK_DIM_X] : 0;
+        sData[threadIdx.y * sDataWidth + threadIdx.x + i * ROW_BLOCK_DIM_X255] = (baseX + i * ROW_BLOCK_DIM_X255) < imageW ? d_Src[i*ROW_BLOCK_DIM_X255] : 0;
     
     }
 
     //load left halo
-#pragma unroll
     
-    for (int i = 0; i < ROW_HALO_STEP; i++) {
+    for (int i = 0; i < halo; i++) {
 
-        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i * ROW_BLOCK_DIM_X) >= 0 ? d_Src[i*ROW_BLOCK_DIM_X] : 0;
+        sData[threadIdx.y * sDataWidth + threadIdx.x + i * ROW_BLOCK_DIM_X255] = (baseX + i * ROW_BLOCK_DIM_X255) >= 0 ? d_Src[i*ROW_BLOCK_DIM_X255] : 0;
     }
 
     //load right halo
-#pragma unroll
 
-    for (int i = ROW_HALO_STEP + ROW_RESULT_STEP; i < ROW_HALO_STEP + ROW_RESULT_STEP + ROW_HALO_STEP; i++) {
+    for (int i = halo + step; i < halo + step + halo; i++) {
         
-        sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X] = (baseX + i * ROW_BLOCK_DIM_X) < imageW ? d_Src[i * ROW_BLOCK_DIM_X] : 0;
+        sData[threadIdx.y * sDataWidth + threadIdx.x + i * ROW_BLOCK_DIM_X255] = (baseX + i * ROW_BLOCK_DIM_X255) < imageW ? d_Src[i * ROW_BLOCK_DIM_X255] : 0;
     
     }
 
@@ -65,73 +63,70 @@ __global__ void rowConvolutionFilter(
     }
 
     //convolve
-#pragma unroll
 
-    for (int i = ROW_HALO_STEP; i < ROW_HALO_STEP+ROW_RESULT_STEP; i++){
+    for (int i = halo; i < halo+step; i++){
 
-        if(baseX + i * ROW_BLOCK_DIM_X < imageW){
+        if(baseX + i * ROW_BLOCK_DIM_X255 < imageW){
 
             float sum = 0;
-
-        #pragma unroll
             
-            for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
+            for (int j = -radius; j <= radius; j++) {
 
-                sum += c_Kernel[KERNEL_RADIUS - j] * sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X + j];    
+                sum += c_Kernel[radius - j] * sData[threadIdx.y * sDataWidth + threadIdx.x + i * ROW_BLOCK_DIM_X255 + j];    
             
             }
 
-            d_Dst[i*ROW_BLOCK_DIM_X] = sum;
+            d_Dst[i*ROW_BLOCK_DIM_X255] = sum;
         }
 
     }
 }
 
-#define COL_BLOCK_DIM_X 32
-#define COL_BLOCK_DIM_Y 32
-#define COL_RESULT_STEP 8
-#define COL_HALO_STEP 1
 
 __global__ void colConvolutionFilter(
     float *d_Dst,
     float *d_Src,
     int imageW,
     int imageH,
-    int pitch
+    int pitch,
+    int radius,
+    int blockX,
+    int blockY,
+    int step,
+    int halo
 )
 {
+    int COL_BLOCK_DIM_X255 = blockX;
+    int COL_BLOCK_DIM_Y255 = blockY;
 
-    __shared__ float sData[COL_BLOCK_DIM_X][(COL_RESULT_STEP + 2 * COL_HALO_STEP) * COL_BLOCK_DIM_Y + 1]; //+1 to avoid shared mem bank conflicts
-    
-    const int baseX = blockIdx.x * COL_BLOCK_DIM_X + threadIdx.x;
-    const int baseY = blockIdx.y * COL_BLOCK_DIM_Y * COL_RESULT_STEP - COL_HALO_STEP * COL_BLOCK_DIM_Y + threadIdx.y;
+    extern __shared__ float sData[]; //+1 to avoid shared mem bank conflicts
+    int sDataWidth = (blockY * (step + 2 * halo) + 1);
+    const int baseX = blockIdx.x * COL_BLOCK_DIM_X255 + threadIdx.x;
+    const int baseY = blockIdx.y * COL_BLOCK_DIM_Y255 * step - halo * COL_BLOCK_DIM_Y255 + threadIdx.y;
 
     d_Src += baseY * pitch + baseX;
     d_Dst += baseY * pitch + baseX;
 
     //load main data
-#pragma unroll
 
-    for (int i = COL_HALO_STEP; i < COL_HALO_STEP + COL_RESULT_STEP; i++) {
+    for (int i = halo; i < halo + step; i++) {
         
-        sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y] = (baseY + i * COL_BLOCK_DIM_Y) < imageH ? d_Src[i * COL_BLOCK_DIM_Y * pitch] : 0;
+        sData[threadIdx.x * sDataWidth + threadIdx.y + i * COL_BLOCK_DIM_Y255] = (baseY + i * COL_BLOCK_DIM_Y255) < imageH ? d_Src[i * COL_BLOCK_DIM_Y255 * pitch] : 0;
     
     }
 
     //load top halo
-#pragma unroll
     
-    for (int i = 0; i < COL_HALO_STEP; i ++) {
+    for (int i = 0; i < halo; i ++) {
 
-        sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y] = (baseY + i * COL_BLOCK_DIM_Y) >= 0 ? d_Src[i * COL_BLOCK_DIM_Y * pitch] : 0;
+        sData[threadIdx.x * sDataWidth + threadIdx.y + i * COL_BLOCK_DIM_Y255] = (baseY + i * COL_BLOCK_DIM_Y255) >= 0 ? d_Src[i * COL_BLOCK_DIM_Y255 * pitch] : 0;
 
     }
     //load bottom halo
-#pragma unroll
     
-    for (int i = COL_HALO_STEP + COL_RESULT_STEP; i < COL_HALO_STEP + COL_RESULT_STEP + COL_HALO_STEP; i++) {
+    for (int i = halo + step; i < halo + step + halo; i++) {
         
-        sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y] = (baseY + i * COL_BLOCK_DIM_Y) < imageH ? d_Src[i * COL_BLOCK_DIM_Y * pitch] : 0;
+        sData[threadIdx.x * sDataWidth + threadIdx.y + i * COL_BLOCK_DIM_Y255] = (baseY + i * COL_BLOCK_DIM_Y255) < imageH ? d_Src[i * COL_BLOCK_DIM_Y255 * pitch] : 0;
     
     }
 
@@ -142,22 +137,19 @@ __global__ void colConvolutionFilter(
     }
 
     //convolve
-#pragma unroll
     
-    for (int i = COL_HALO_STEP; i < COL_HALO_STEP + COL_RESULT_STEP; i++) {
+    for (int i = halo; i < halo + step; i++) {
 
-        if ((baseY + i * COL_BLOCK_DIM_Y) < imageH) {
+        if ((baseY + i * COL_BLOCK_DIM_Y255) < imageH) {
 
             float sum = 0;
-
-        #pragma unroll
             
-            for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
+            for (int j = -radius; j <= radius; j++) {
                 
-                sum += c_Kernel[KERNEL_RADIUS - j] * sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y + j];
+                sum += c_Kernel[radius - j] * sData[threadIdx.x * sDataWidth + threadIdx.y + i * COL_BLOCK_DIM_Y255 + j];
             }
 
-            d_Dst[i * COL_BLOCK_DIM_Y * pitch] = sum;
+            d_Dst[i * COL_BLOCK_DIM_Y255 * pitch] = sum;
         }
     }
 }
@@ -167,13 +159,18 @@ void rowConvolve(
     float *d_Src,
     int imageW,
     int imageH,
-    int pitch
+    int pitch,
+    int radius,
+    int blockX,
+    int blockY,
+    int step,
+    int halo
     ){
 
-        dim3 blocks((imageW + (ROW_RESULT_STEP * ROW_BLOCK_DIM_X) - 1) / (ROW_RESULT_STEP * ROW_BLOCK_DIM_X), (imageH + ROW_BLOCK_DIM_Y - 1)  / ROW_BLOCK_DIM_Y);
-        dim3 threads(ROW_BLOCK_DIM_X, ROW_BLOCK_DIM_Y);
+        dim3 blocks((imageW + (step * blockX) - 1) / (step * blockX), (imageH + blockY - 1)  / blockY);
+        dim3 threads(blockX, blockY);
 
-        rowConvolutionFilter<<<blocks,threads>>>(d_Dst,d_Src,imageW,imageH,pitch);
+        rowConvolutionFilter<<<blocks,threads,blockY * blockX * (step + 2 * halo) * sizeof(float) >>>(d_Dst,d_Src,imageW,imageH,pitch,radius,blockX,blockY,step,halo);
 
     }
 
@@ -182,12 +179,17 @@ void colConvolve(
     float *d_Src,
     int imageW,
     int imageH,
-    int pitch
+    int pitch,
+    int radius,
+    int blockX,
+    int blockY,
+    int step,
+    int halo
     ){
 
-        dim3 blocks((imageW + COL_BLOCK_DIM_X - 1) / ROW_BLOCK_DIM_X, (imageH + COL_BLOCK_DIM_Y * COL_RESULT_STEP - 1)  / (COL_BLOCK_DIM_Y * COL_RESULT_STEP));
-        dim3 threads(COL_BLOCK_DIM_X, COL_BLOCK_DIM_Y);
+        dim3 blocks((imageW + blockX - 1) / blockX, (imageH + blockY * step - 1)  / (blockY * step));
+        dim3 threads(blockX, blockY);
         
-        colConvolutionFilter<<<blocks,threads>>>(d_Dst,d_Src,imageW,imageH,pitch);
+        colConvolutionFilter<<<blocks,threads,blockX * (blockY * (step + 2 * halo) + 1) * sizeof(float)>>>(d_Dst,d_Src,imageW,imageH,pitch,radius,blockX,blockY,step,halo);
 
     }

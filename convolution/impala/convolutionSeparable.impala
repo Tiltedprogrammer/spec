@@ -70,7 +70,8 @@ fn rowConvolutionFilter(
 
 }
 
-fn rowConvolveImpala(d_Src : &[f32],
+fn colConvolutionFilter(
+    d_Src : &mut[f32],
     d_Dst : &mut[f32],
     @kernel : &[f32],
     @kernel_radius : i32,
@@ -81,20 +82,87 @@ fn rowConvolveImpala(d_Src : &[f32],
     @block_sizeY : i32,
     @RESULT_STEP : i32) -> (){
 
-        let grid_x = (imageW + block_sizeX * RESULT_STEP - 1) / (block_sizeX * RESULT_STEP);
-        let grid_y = (imageH + block_sizeY - 1) / block_sizeY;
+        let kernel_length : i32 = kernel_radius * 2 + 1;
+        // let RESULT_STEP = 8;
+        let HALO = 1;
+
+        let sDataWidth = (RESULT_STEP + 2 * HALO) * block_sizeY + 1;
+        //more then a half of the available shared mem
+        let sData = reserve_shared[f32](block_sizeX * ((RESULT_STEP + 2 * HALO) * block_sizeY + 1));
+
+        let baseX = cuda_blockIdx_x() * block_sizeX + cuda_threadIdx_x();
+        let baseY = cuda_blockIdx_y() * RESULT_STEP * block_sizeY - HALO * block_sizeY + cuda_threadIdx_y();
         
-        let threads = (32,32,1);
-        //grid_x * grid_y size
-        let grid = (grid_x * threads(0),grid_y * threads(1),1);
-        //assert(ROWS_BLOCKDIM_X * ROWS_HALO_STEPS >= KERNEL_RADIUS);
+        let d_Src_offset = baseY * pitch + baseX;
+        let d_Dst_offset = baseY * pitch + baseX;
 
-        //merge columnt and row filters
-
-        with cuda(0,grid,threads) {
-            rowConvolutionFilter(d_Src,d_Dst,kernel,kernel_radius,imageH,imageW,pitch,block_sizeX,block_sizeY,RESULT_STEP);
+        //load main data
+        for i in unroll(HALO,HALO + RESULT_STEP) {
+            sData(cuda_threadIdx_x() * sDataWidth + i * block_sizeY + cuda_threadIdx_y()) = if (baseY + i * block_sizeY) < imageH {d_Src(d_Src_offset + i * block_sizeY * pitch)} else {0.0f32};
+        }
+        //load top halo
+        for i in unroll(0,HALO) {
+            sData(cuda_threadIdx_x() * sDataWidth + i * block_sizeY + cuda_threadIdx_y()) = if (baseY + i * block_sizeY) >= 0 {d_Src(d_Src_offset + i * block_sizeY * pitch)} else {0.0f32};
         }
 
-        return()
+        //load bottom halo
+        for i in unroll(HALO+RESULT_STEP, HALO + RESULT_STEP + HALO) {
+            sData(cuda_threadIdx_x() * sDataWidth + i * block_sizeY + cuda_threadIdx_y()) = if (baseY + i * block_sizeY) < imageH {d_Src(d_Src_offset + i * block_sizeY * pitch)} else {0.0f32};
+        }
+
+        cuda_syncthreads();
+
+        if baseX > imageW {
+            return()
+        }
+
+        //convolve
+        for i in unroll(HALO, HALO + RESULT_STEP) {
+            if (baseY + i * block_sizeY) < imageH {
+                let mut sum : f32 = 0.0f32;
+
+                for j in unroll(-kernel_radius,kernel_radius + 1) {
+                    sum = sum + kernel(kernel_radius - j) * sData(cuda_threadIdx_x() * sDataWidth + cuda_threadIdx_y() + i * block_sizeY + j);
+                }
+
+                d_Dst(d_Dst_offset + i * block_sizeY * pitch) = sum;
+            }
+        }
+}
+
+fn convolveImpala(d_Src : &[f32],
+    d_Buf : &mut[f32],
+    d_Dst : &mut[f32],
+    @kernel : &[f32],
+    @kernel_radius : i32,
+    @imageH : i32, 
+    @imageW:i32, 
+    @pitch : i32,
+    @block_sizeX : i32,
+    @block_sizeY : i32,
+    @RESULT_STEP : i32) -> (){
+
+        let grid_xR = (imageW + block_sizeX * RESULT_STEP - 1) / (block_sizeX * RESULT_STEP);
+        let grid_yR = (imageH + block_sizeY - 1) / block_sizeY;
         
-    }
+        let threadsROW = (block_sizeX,block_sizeY,1);
+        //grid_x * grid_y size;
+        let gridRow = (grid_xR * threadsROW(0),grid_yR * threadsROW(1),1);
+        //assert(ROWS_BLOCKDIM_X * ROWS_HALO_STEPS >= KERNEL_RADIUS);
+        //merge columnt and row filters;
+
+        cuda(0,gridRow,threadsROW, || {
+            rowConvolutionFilter(d_Src,d_Buf,kernel,kernel_radius,imageH,imageW,pitch,block_sizeX,block_sizeY,RESULT_STEP);
+        });
+        //X,Y are symmetric:
+        let threadsCOL = (block_sizeY,block_sizeX,1);
+        let grid_xC = (imageW + block_sizeY -1) / block_sizeY;
+        let grid_yC = (imageH + block_sizeX * RESULT_STEP - 1) / (block_sizeX * RESULT_STEP);
+        let gridCol = (grid_xC * threadsCOL(0),grid_yC * threadsCOL(1),1);
+
+        cuda(0,gridCol,threadsCOL, || {
+            colConvolutionFilter(d_Buf,d_Dst,kernel,kernel_radius,imageH,imageW,pitch,block_sizeY,block_sizeX,RESULT_STEP);
+        });
+
+        return()
+}

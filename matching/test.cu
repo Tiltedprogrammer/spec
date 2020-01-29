@@ -263,7 +263,7 @@ __global__ void match_multy_const(int p_number, char* text, long text_size, char
             
                     if(text[t_id + j] != mpatterns[j + p_offset]) {
                         matched = -1;
-                        // printf("huy %i\n",i);
+                        
                         break;
                     }
                 } 
@@ -275,6 +275,47 @@ __global__ void match_multy_const(int p_number, char* text, long text_size, char
             p_offset += cp_sizes[i];
         }             
     }
+}
+
+__global__ void match_multy_shared(char* patterns, int* p_sizes, int p_number,int p_len, char* text, long text_size, char* result_buf){
+    
+    //assume that blockSize >= p_len
+    extern __shared__ char sPatterns[];
+    if (threadIdx.x < p_len){
+        sPatterns[threadIdx.x] = patterns[threadIdx.x];
+    }
+    __syncthreads();
+
+    long t_id = threadId();
+
+    if(t_id < text_size){
+
+        int p_offset = 0;
+        int matched = 1;
+
+        result_buf[t_id] = 0;
+
+        for(int i = 0; i < p_number; i++) {//for each pattern
+            matched = 1;
+            if(t_id < text_size - p_sizes[i] + 1){
+                for(int j = 0; j < p_sizes[i]; j++) {
+            
+                    if(text[t_id + j] != sPatterns[j + p_offset]) {
+                        matched = -1;
+                        
+                        break;
+                    }
+                } 
+            
+                if(matched == 1) {
+                    result_buf[t_id] = i+1; // 0 stands for missmatch
+                }
+            }
+            p_offset += p_sizes[i];
+        }             
+    }
+
+
 }
 
 __global__ void match_chunk_shared(char* pattern, int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
@@ -591,6 +632,76 @@ void multipattern_match_const(std::vector<std::string> vpatterns, std::string fi
     // cudaFree(dsizes);
     // cudaEventDestroy(start);
     // cudaEventDestroy(stop);
+}
+
+void multipattern_match_shared(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose){
+
+    int* sizes = new int[vpatterns.size()];
+
+    int len = 0;
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].size();
+        len += sizes[i];    
+    }
+    
+    int loffset = 0;
+
+    char* dpatterns;
+    int* dsizes;
+
+    char* dtextptr;
+    long text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
+    
+    cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
+    cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
+    
+    cudaMalloc((void**)&dpatterns, len * sizeof(char));
+    
+    for(int i = 0; i < vpatterns.size(); i++){
+        cudaMemcpy((void*)(dpatterns + loffset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
+        loffset += sizes[i];
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    
+    //nochunk only
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+    am::timer time;
+    std::cout << "running ..." << "\n";
+    time.start();
+
+    grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    gsqrt = (int)sqrt(grid_size) + 1;
+    dim3 grid(gsqrt,gsqrt);
+    match_multy_shared<<<grid,block,len * sizeof(char)>>>(dpatterns,dsizes,vpatterns.size(),len,dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
+    time.stop();
+
+    
+    delete[](sizes);
+    
+    
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    cudaFree(dpatterns);
+    cudaFree(dsizes);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);  
 }
 
 void match_naive(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,int verbose){ //nochunk == 0 => nochunk
@@ -1026,6 +1137,8 @@ int main(int argc, char** argv) {
                     
                 }else if(alg_name == "mnaivec"){
                     multipattern_match_const(patterns, filename, size, offset, verbose);
+                }else if(alg_name == "mnaivesh"){
+                    multipattern_match_shared(patterns,filename,size,offset,verbose);
                 }
             }
         }else{

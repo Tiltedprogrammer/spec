@@ -10,7 +10,7 @@ if(BLOCK_SIZE)
     add_definitions(-DBLOCK_SIZE=${BLOCK_SIZE})
 else()
     message("-- Using default BLOCK_SIZE which is 1024")
-    add_definitions(-DBLOCK_SIZE=512)    
+    add_definitions(-DBLOCK_SIZE=1024)    
 endif()
 
 add_executable(fun main.cu ${FUN_INCLUDE_FILE} ${NON_JIT_MATCH})

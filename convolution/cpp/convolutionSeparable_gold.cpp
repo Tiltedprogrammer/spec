@@ -10,7 +10,6 @@
  */
 
 
-#include "convolutionSeparable.hpp"
 #include "convolutionSeparable_gold.hpp"
 
 

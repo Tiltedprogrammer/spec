@@ -9,11 +9,31 @@
 
 #include "../cimg/CImg-2.8.3/CImg.h"
 #include "convolutionSeparable.hpp"
+#include "convolutionSeparable255.hpp"
+#include "convolutionSeparable127.hpp"
+#include "convolutionSeparable63.hpp"
+#include "convolutionSeparable31.hpp"
+#include "convolutionSeparable15.hpp"
 #include "convolutionSeparable_gold.hpp"
+
+#include "defines.hpp"
+
 
 int main(int argc, char ** argv){
 
-    cimg_library::CImg<float> img1("/home/alekseytyurinspb_gmail_com/specialization/spec/convolution/images/graytussaint100.jpg");
+    if (argc < 5) {
+        std::cout << "Image path and #iterations required" << "\n";
+        return 0;
+    }
+    int flag = std::atoi(argv[4]);
+    int KERNEL_LENGTH = std::atoi(argv[3]);
+    assert(KERNEL_LENGTH % 2 == 1);
+    int KERNEL_RADIUS = (KERNEL_LENGTH - 1) / 2;
+    std::string img_path(argv[1]);
+    int iterations = std::atoi(argv[2]);
+    std::cout << "# of iterations set to " << iterations << "\n";
+    // cimg_library::CImg<float> img1("/home/alekseytyurinspb_gmail_com/specialization/spec/convolution/images/graytussaint100.jpg");
+    cimg_library::CImg<float> img1(img_path.c_str());
 
     float* h_Kernel = new float[KERNEL_LENGTH];
     
@@ -46,14 +66,90 @@ int main(int argc, char ** argv){
     cudaMallocPitch((void**)&d_Input,&pitch,img1.width() * sizeof(float),img1.height());
     cudaMallocPitch((void**)&d_Buffer,&pitch,img1.width() * sizeof(float),img1.height());
     cudaMallocPitch((void**)&d_Output,&pitch,img1.width() * sizeof(float),img1.height());
-
-    setConvolutionKernel(h_Kernel);
+    
 
     cudaMemcpy2D(d_Input, pitch, img1.data(), img1.width()*sizeof(float), img1.width()*sizeof(float), img1.height(), cudaMemcpyHostToDevice);
 
-    rowConvolve(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+    if(KERNEL_RADIUS == 15 && flag){
+        setConvolutionKernel31(h_Kernel,KERNEL_LENGTH);
 
-    colConvolve(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve31(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+
+            colConvolve31(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+    
+        }
+        cudaDeviceSynchronize();
+    
+    }else if(KERNEL_RADIUS == 31 && flag){
+        setConvolutionKernel63(h_Kernel,KERNEL_LENGTH);
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve63(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+
+            colConvolve63(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+    
+        }
+        cudaDeviceSynchronize();
+    }else if(KERNEL_RADIUS == 7 && flag){
+        setConvolutionKernel15(h_Kernel,KERNEL_LENGTH);
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve15(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+
+            colConvolve15(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+    
+        }
+        cudaDeviceSynchronize();
+    }else if(KERNEL_RADIUS == 63 && flag){
+        setConvolutionKernel127(h_Kernel,KERNEL_LENGTH);
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve127(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+
+            colConvolve127(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+    
+        }
+        cudaDeviceSynchronize();
+    }else if(KERNEL_RADIUS == 127 && flag){
+        setConvolutionKernel255(h_Kernel,KERNEL_LENGTH);
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve255(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float));
+
+            colConvolve255(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float));
+    
+        }
+        cudaDeviceSynchronize();
+    }else {
+        int blockX;
+        int blockY;
+        if(KERNEL_RADIUS <= 31){
+            blockX = 32;
+            blockY = 16;
+        }else if(KERNEL_RADIUS <= 63){
+            blockX = 64;
+            blockY = 8;
+        }else if(KERNEL_RADIUS <= 127){
+            blockX = 128;
+            blockY = 4;
+        }else {
+            std::cout << "Too huge length, maximum supported is 255" << "\n";
+            return 0;
+        }
+        setConvolutionKernel(h_Kernel,KERNEL_LENGTH);
+        for (int j = 0; j < iterations; j++) {
+    
+            rowConvolve(d_Buffer,d_Input,img1.width(),img1.height(), pitch / sizeof(float),KERNEL_RADIUS,blockX,blockY,8,1);
+
+            colConvolve(d_Output,d_Buffer,img1.width(),img1.height(),pitch / sizeof(float),KERNEL_RADIUS,blockY,blockX,8,1);
+    
+        }
+        cudaDeviceSynchronize();
+    }
+
+    
 
     cudaMemcpy2D(h_Output, img1.width() * sizeof(float), d_Output, pitch, img1.width()*sizeof(float), img1.height(), cudaMemcpyDeviceToHost);
 
