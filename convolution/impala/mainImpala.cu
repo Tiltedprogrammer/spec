@@ -24,47 +24,98 @@
 
 int main(int argc, char** argv) {
 
-    if (argc < 4) {
-        std::cout << "Image path and #iterations required" << "\n";
+    cxxopts::Options options("as", " - example command line options");
+    options.add_options()("f,filename","path to image to convolve",cxxopts::value<std::string>())
+                         ("o,outfile","path to save convolved image",cxxopts::value<std::string>())
+                         ("i,isize","size of the image to generate : isize x isize",cxxopts::value<int>())
+                         ("s,fsize","size of the filter to convolve with",cxxopts::value<int>())
+                         ("c,static","whether to use static filters or not : 0 for not, 1 is default",cxxopts::value<int>())
+                         ("t,test","assert correctness of the filter",cxxopts::value<int>());
+
+    auto result = options.parse(argc, argv);
+    int flag = 0;
+    int test = 0;
+    int KERNEL_LENGTH = 3;
+    int imageH = 0;
+    int imageW = 0;
+    if(result.count("fsize")){
+        KERNEL_LENGTH = result["fsize"].as<int>();
+        assert(KERNEL_LENGTH % 2 == 1);
+    }else{
+        std::cout << "filter size if required" << "\n";
         return 0;
     }
 
-    int KERNEL_LENGTH = std::atoi(argv[3]);
-    std::string img_path(argv[1]);
-    int iterations = std::atoi(argv[2]);
-    std::cout << "# of iterations set to " << iterations << "\n";
+    std::string img_path;
+    int KERNEL_RADIUS = (KERNEL_LENGTH - 1) / 2;
+    int image = 0;
+    if(result.count("filename")){
+        img_path = result["filename"].as<std::string>();
+        image = 1;
+    }else if(result.count("isize")){
+        imageH = imageW = result["isize"].as<int>();
+    }else{
+        std::cout << "Either input image or its size is required" << "\n";
+        return 0;
+    }
+
+    if(result.count("static")){
+        flag = result["static"].as<int>();
+    }
+
+    if(result.count("test")){
+        test = result["test"].as<int>();
+    }
+
+    int iterations = 1;
+
     // cimg_library::CImg<float> img1("/home/alekseytyurinspb_gmail_com/specialization/spec/convolution/images/graytussaint100.jpg");
-    cimg_library::CImg<float> img1(img_path.c_str());
+    srand(200);
+    
+    float* h_Input;
+    
+    if(image){
+        cimg_library::CImg<float> img1(img_path.c_str());
+        imageW = img1.width();
+        imageH = img1.height();
+        h_Input = new float [imageH * imageW];
+        for (int i = 0; i < imageW * imageH; i++)
+        {
+            h_Input[i] = img1.data()[i];
+        }
+    }else{
+        long size = imageH * imageW;
+        h_Input = new float [size];
+        for (long i = 0; i < imageW * imageH; i++)
+        {
+            h_Input[i] = (float)(rand() % 16);
+        }
+    }
+
+
+    std::cout << "image size is " << imageW << "x" << imageH <<"\n";
 
     float* h_Kernel = new float[KERNEL_LENGTH];
-    float* h_Output = new float[img1.width() * img1.height()];
-    float* h_OutputGold = new float[img1.width() * img1.height()];
-    float* h_BufferGold = new float[img1.width() * img1.height()];
+    
+    float* h_Output = new float[imageW * imageH];
+    
 
     float  *d_Input,
            *d_Buffer,
            *d_Output;
 
-
     size_t pitch;
-    cudaMallocPitch((void**)&d_Input,&pitch,img1.width() * sizeof(float),img1.height());
-    cudaMallocPitch((void**)&d_Buffer,&pitch,img1.width() * sizeof(float),img1.height());
-    cudaMallocPitch((void**)&d_Output,&pitch,img1.width() * sizeof(float),img1.height());
+    cudaMallocPitch((void**)&d_Input,&pitch,imageW * sizeof(float),imageH);
+    cudaMallocPitch((void**)&d_Buffer,&pitch,imageW * sizeof(float),imageH);
+    cudaMallocPitch((void**)&d_Output,&pitch,imageW * sizeof(float),imageH);
 
-    cudaMemcpy2D(d_Input, pitch, img1.data(), img1.width()*sizeof(float), img1.width()*sizeof(float), img1.height(), cudaMemcpyHostToDevice);
-
-    srand(200);
+    cudaMemcpy2D(d_Input, pitch, h_Input, imageW*sizeof(float), imageW*sizeof(float), imageH, cudaMemcpyHostToDevice);
     
     for (unsigned int i = 0; i < KERNEL_LENGTH; i++) {
         
         h_Kernel[i] = (float)(rand() % 16);
         
     }
-
-    for (int i = 0; i < KERNEL_LENGTH; i++) {
-        std::cout << h_Kernel[i] << " ";
-    }
-    std::cout << "\n";
 
     std::string kernel_string;
 
@@ -97,8 +148,8 @@ int main(int argc, char** argv) {
     dummy += "   convolveImpala(d_Src, d_Buf, d_Dst, [" +
             kernel_string + "], " +
             std::to_string((KERNEL_LENGTH - 1) / 2) + "i32, " +
-            std::to_string(img1.height()) + "i32, " +
-            std::to_string(img1.width()) + "i32, " +
+            std::to_string(imageH) + "i32, " +
+            std::to_string(imageW) + "i32, " +
             std::to_string(pitch / sizeof(float)) + "i32, " +
             std::to_string(block_sizeX) + "i32, " +
             std::to_string(block_sizeY) + "i32, " +
@@ -132,28 +183,38 @@ int main(int argc, char** argv) {
     }
     cudaDeviceSynchronize();
 
-    cudaMemcpy2D(h_Output, img1.width() * sizeof(float), d_Output, pitch, img1.width()*sizeof(float), img1.height(), cudaMemcpyDeviceToHost);
+    cudaMemcpy2D(h_Output, imageW * sizeof(float), d_Output, pitch, imageW*sizeof(float), imageH, cudaMemcpyDeviceToHost);
 
 
     //gold
+    if(test){
+        float* h_OutputGold = new float[imageW * imageH];
+        float* h_BufferGold = new float[imageW * imageH];
 
-    convolutionRowCPU(h_BufferGold,img1.data(),h_Kernel,img1.width(),img1.height(),(KERNEL_LENGTH - 1) /2);
-    convolutionColumnCPU(h_OutputGold,h_BufferGold,h_Kernel,img1.width(),img1.height(),(KERNEL_LENGTH - 1) /2);
-    
+        convolutionRowCPU(h_BufferGold,h_Input,h_Kernel,imageW,imageH,(KERNEL_LENGTH - 1) /2);
+        convolutionColumnCPU(h_OutputGold,h_BufferGold,h_Kernel,imageW,imageH,(KERNEL_LENGTH - 1) /2);
 
-    cimg_library::CImg<float> output(h_Output,img1.width(),img1.height(),1,1);
-    cimg_library::CImg<float> convolved(h_OutputGold,img1.width(),img1.height(),1,1);
+        for (long i = 0; i < imageH * imageW; i++) {
+                assert(h_OutputGold[i] == h_Output[i]);
+        }
+        
+        delete[] (h_OutputGold);
+        delete[] (h_BufferGold);
+    }
+
+    // cimg_library::CImg<float> output(h_Output,img1.width(),img1.height(),1,1);
+    // cimg_library::CImg<float> convolved(h_OutputGold,img1.width(),img1.height(),1,1);
 
     //Tests whether convolution is correct
-    assert(convolved == output);
-    output.save("impala-convolved.jpg");
-    convolved.save("manually-convolved.jpg");
-    std::cout << "pitch = " << pitch << "\n";
+    // assert(convolved == output);
 
+    // output.save("impala-convolved.jpg");
+    // convolved.save("manually-convolved.jpg");
+    // std::cout << "pitch = " << pitch << "\n";
+
+    delete[] (h_Input);
     delete[] (h_Kernel);
     delete[] (h_Output);
-    delete[] (h_OutputGold);
-    delete[] (h_BufferGold);
 
     cudaFree(d_Input);
     cudaFree(d_Buffer);
