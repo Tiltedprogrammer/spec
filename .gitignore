@@ -11,3 +11,6 @@ test/*
 !test/*.ipynb
 *.code-workspace
 benchmarking/*
+.vscode
+.ipynb_checkpoints
+cache
