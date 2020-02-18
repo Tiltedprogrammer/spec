@@ -18,8 +18,9 @@
 #include "convolutionSeparable.inc"
 
 //timers
-#include "timer.h"
-#include "cxxopts.hpp"
+#include "../include/timer.h"
+//arg parsing
+#include "../include/cxxopts.hpp"
 
 
 int main(int argc, char** argv) {
