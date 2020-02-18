@@ -3,9 +3,9 @@
 pe_*
 *.out
 fo
-benchmarking
-!benchmarking/*.ipynb
-!benchmarking/figures
+*/benchmarking/*
+!*/benchmarking/*ipynb
+!*/benchmarking/figures
 .ipynb_checkpoints
 *.code-workspace
 .vscode
