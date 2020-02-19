@@ -1,5 +1,5 @@
 # spec
-A repository that contain some benchmarks for partial evaluation of different GPU application scenarios leveraging [AnyDSL framework](https://anydsl.github.io/ "AnyDSL project") and CUDA.
+A repository that contain some benchmarks for partial evaluation of different GPU application scenarios leveraging [AnyDSL framework](https://anydsl.github.io/ "AnyDSL project") and CUDA. Benchmarks are available as Python notebooks.
 
 # Implementations
 * Multiple string matching:
@@ -55,4 +55,55 @@ However, since ```*patterns``` are fixed at runtime, partial evaluation could be
 
 ![alt text](https://i.ibb.co/s2pQnqF/Screenshot-from-2020-02-18-23-28-54.png)
 
+The observed transformation results in the following performance of naive GPU pattern matching (evaluated using 16 file signatures as patterns and raw disk data as a subject string on GTX 1070):
+
+![alt text](https://i.ibb.co/zsMSSgp/Screenshot-from-2020-02-10-00-08-30.png)
+
+The performance gain occured due to poor access patterns to each memory space aggravated by thread divergence. Poor access patterns induce either sequential loading or fetching redundant memory to satisfy alignment and fetch size. E.g. actual amount of memory transered for GTX 1070 matching with patterns in global memory and for partially evaluated version are depicted below (subject string size is 2.9GB raw disk data, patterns total length is about 160B) 
+
+* Global memory version:
+
+![alt text](https://i.ibb.co/qsr6hGy/Bbis3h-Bn-2-Q.jpg)
+
+* Partially evaluated one:
+
+![alt text](https://i.ibb.co/RDCFWqc/GXT6x7-MJ4p-Q.jpg)
+
+Thus, in case when e.g. constant memory achieves its best perforamance, partial evaluation hardly makes the application significantly faster. For example, considering *Separable Convolution Filter* implementation from *NVIDIA's* SDK, where filter kernel resides in constant memory and has the best access pattern, the relocation of the kernel performed by partial evaluation has the following effect:
+
+![alt text](https://i.ibb.co/J7yHSHr/Screenshot-from-2020-02-19-20-55-26.png)
+
+
 # Build instructions
+
+## Dependencies
+* Working installation of [AnyDSL framework](https://github.com/AnyDSL/anydsl)
+* Working installation of NVIDIA CUDA with all paths set up
+* Convolution filtering depends on *libjpeg*, e.g. ```sudo apt-get install libjpeg-dev```
+* Python 3
+* Python Jupyter notebook to view benchmarks
+* Python matplotlib
+
+## Build
+To build the test applications simply run:
+```Bash
+mkdir build && cd build && cmake .. -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/" && make
+```
+If the following error occurs:
+```Bash
+Make Error at {PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake:135 (list):
+  list sub-command REMOVE_ITEM requires list to be present.
+Call Stack (most recent call first):
+  CMakeLists.txt:4 (find_package)
+```
+comment the 135th line in ```{PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake```:
+
+```list(REMOVE_ITEM _release_configs ${_debug_configs})```
+
+To run the coresponding benchmarks, move compiled applications to coresponding benchmarking folder, run jupyter notebook -> Cell->Run All. E.g. for multiple pattern matching:
+
+```Bash
+mv build/matching/cpp/match.out ../matching/benchmarking && mv build/matching/impala/match_spec.out ../matching/benchmarking
+```
+Then open ```matching/benchmarking/MatchingBenchmarking.ipynb```, choose a file with a subject string and pass it to ```Runner```, e.g. one can provide ```/dev/sda1``` as input: ```runner = Runner(...,filename='/dev/sda1',offset=0...)
+ ```and click ```Cell -> Run All```
