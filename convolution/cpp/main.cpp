@@ -19,7 +19,7 @@
 #include "defines.hpp"
 
 // arg parsing
-#include "cxxopts.hpp"
+#include "../include/cxxopts.hpp"
 
 int main(int argc, char ** argv){
 
