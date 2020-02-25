@@ -6,7 +6,7 @@ A repository that contain some benchmarks for partial evaluation of different GP
   * Three naive implementations in CUDA using *global*, *constant* and *shared* memory respectively to store the patterns
   * Implementation utilizing partial evaluation to "store" the patterns
  * Image separable convolution
-   * Separable convolution taken from NVIDIA's SDK with contant memory to store the filter
+   * Separable convolution taken from NVIDIA's SDK with constant memory to store the filter
    * Implementation utilizing partial evaluation to "store" the filter
    
  # Partial evaluation
