@@ -78,11 +78,13 @@ Thus, in case when e.g. constant memory achieves its best perforamance, partial 
 
 ## Dependencies
 * Working installation of [AnyDSL framework](https://github.com/AnyDSL/anydsl)
+
+   AnyDSL should be installed with ```RUNTIME_JIT:=true``` option set in ```config.sh```
 * Working installation of NVIDIA CUDA with all paths set up
 * Convolution filtering depends on *libjpeg*, e.g. ```sudo apt-get install libjpeg-dev```
 * Python 3
 * Python Jupyter notebook to view benchmarks
-* Python matplotlib
+* Python matplotlib, e.g. ```pip3 install -r requirements.txt```
 
 ## Build
 To build the test applications simply run:
