@@ -10,3 +10,4 @@ fo
 *.code-workspace
 .vscode
 data/*
+env/
