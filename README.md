@@ -6,7 +6,7 @@ A repository that contain some benchmarks for partial evaluation of different GP
   * Three naive implementations in CUDA using *global*, *constant* and *shared* memory respectively to store the patterns
   * Implementation utilizing partial evaluation to "store" the patterns
  * Image separable convolution
-   * Separable convolution taken from NVIDIA's SDK with contant memory to store the filter
+   * Separable convolution taken from NVIDIA's SDK with constant memory to store the filter
    * Implementation utilizing partial evaluation to "store" the filter
    
  # Partial evaluation
@@ -78,27 +78,24 @@ Thus, in case when e.g. constant memory achieves its best perforamance, partial 
 
 ## Dependencies
 * Working installation of [AnyDSL framework](https://github.com/AnyDSL/anydsl)
+
+   AnyDSL should be installed with ```RUNTIME_JIT:=true``` option set in ```config.sh```
 * Working installation of NVIDIA CUDA with all paths set up
 * Convolution filtering depends on *libjpeg*, e.g. ```sudo apt-get install libjpeg-dev```
 * Python 3
 * Python Jupyter notebook to view benchmarks
-* Python matplotlib
+* Python matplotlib, e.g. ```pip3 install -r requirements.txt```
 
 ## Build
 To build the test applications simply run:
 ```Bash
-mkdir build && cd build && cmake .. -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/" && make
+mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/" && make
 ```
-If the following error occurs:
-```Bash
-Make Error at {PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake:135 (list):
-  list sub-command REMOVE_ITEM requires list to be present.
-Call Stack (most recent call first):
-  CMakeLists.txt:4 (find_package)
+or
 ```
-comment the 135th line in ```{PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake```:
-
-```list(REMOVE_ITEM _release_configs ${_debug_configs})```
+cmake .. -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/"
+```
+if ```cmake --version``` >= 3.11
 
 To run the coresponding benchmarks, move compiled applications to coresponding benchmarking folder, run jupyter notebook -> Cell->Run All. E.g. for multiple pattern matching:
 
