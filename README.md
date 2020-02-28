@@ -89,18 +89,13 @@ Thus, in case when e.g. constant memory achieves its best perforamance, partial 
 ## Build
 To build the test applications simply run:
 ```Bash
-mkdir build && cd build && cmake .. -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/" && make
+mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/" && make
 ```
-If the following error occurs:
-```Bash
-Make Error at {PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake:135 (list):
-  list sub-command REMOVE_ITEM requires list to be present.
-Call Stack (most recent call first):
-  CMakeLists.txt:4 (find_package)
+or
 ```
-comment the 135th line in ```{PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/anydsl_runtime-config.cmake```:
-
-```list(REMOVE_ITEM _release_configs ${_debug_configs})```
+cmake .. -DAnyDSL_runtime_DIR="${PATH_TO_ANYDSL_FOLDER}/runtime/build/share/anydsl/cmake/"
+```
+if ```cmake --version``` >= 3.11
 
 To run the coresponding benchmarks, move compiled applications to coresponding benchmarking folder, run jupyter notebook -> Cell->Run All. E.g. for multiple pattern matching:
 
