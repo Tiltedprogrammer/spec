@@ -7,7 +7,7 @@ set_source_files_properties(${FUN_INCLUDE_FILE} PROPERTIES GENERATED TRUE)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 
-add_executable(filter_spec.out mainImpala.cu ../cpp/convolutionSeparable_gold.cpp ../cpp/convolutionSeparable_gold.hpp ${FUN_INCLUDE_FILE})
+cuda_add_executable(filter_spec.out mainImpala.cpp ../cpp/convolutionSeparable_gold.cpp ../cpp/convolutionSeparable_gold.hpp ${FUN_INCLUDE_FILE})
 
 link_directories(/usr/X11R6/lib)
 target_include_directories(filter_spec.out PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS})

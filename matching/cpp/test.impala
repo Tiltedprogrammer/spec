@@ -1,0 +1,8 @@
+extern "C" {
+    fn println(&[u8]) -> ();
+}
+
+extern
+fn hello() -> () {
+    println("Hello, world !");
+}

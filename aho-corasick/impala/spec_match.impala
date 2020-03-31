@@ -1,0 +1,668 @@
+
+//table is embedded into the code and has size of (num_states x 256)
+fn spec_match(@d_PFAC_table : &[i32],
+    @char_set : i32,
+    @num_states : i32,
+    @blocksize : i32,
+    @gridsize_x : i32,
+    @gridsize_y : i32,
+    @extrasize_tb : i32,
+    d_input_string : &[i32], 
+    input_size : i32,
+    n_hat : i32, 
+    @num_finalState : i32, 
+    @initial_state : i32, 
+    num_blocks_minus1 : i32,
+    d_match_result : &mut[i32]) -> () {
+
+        //gridsize is overall number of threads
+      let block = (blocksize,1,1);
+      let grid = (gridsize_x * block(0),gridsize_y,1);
+      cuda(0,grid,block,|| {
+        let trap_state = -1;
+        let t_id = cuda_threadIdx_x();
+        let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+        let mut start = b_id * blocksize + t_id;
+
+        let mut matching = [0,0,0,0];
+
+        let s_Input = reserve_shared[i32](blocksize + extrasize_tb);
+
+        //cant be actually
+        if b_id > num_blocks_minus1 {
+            return()
+        }
+
+        //cast to char
+        let c_Input = bitcast[&mut[3][u8]](s_Input);
+        
+        if start < n_hat {
+            s_Input(t_id) = d_input_string(start);
+        }
+
+        start = start + blocksize;
+
+        if (start < n_hat) && (t_id < extrasize_tb) {
+            s_Input(t_id + blocksize) = d_input_string(start);
+        }
+
+        cuda_syncthreads();
+
+        let bdy = input_size - b_id * blocksize * 4;
+
+
+        for j in range(0,4) {
+            let mut pos = t_id + j * blocksize;
+            if pos < bdy {
+                let mut c : i32 = bitcast[i32](c_Input(pos)); //dynamic :(
+                let mut state = trap_state;
+                for i in unroll(0,char_set){
+                    if i == c {
+                        state = d_PFAC_table(initial_state * char_set + i);
+                        break()
+
+                    }
+                }
+
+                if trap_state != state {
+                    if state <= num_finalState {
+                        matching(j) = state;
+                    }
+                    pos = pos + 1;
+
+                    while pos < bdy {
+
+                        c = bitcast[i32](c_Input(pos));
+                        for s in unroll(1,num_states) {
+                            if state == s {
+                                for ch in unroll(0,char_set) {
+                                    if ch == c {
+                                        state = d_PFAC_table(s * char_set + ch);
+                                        break()    
+                                    }
+                                }
+                                break()
+                            }
+                        }
+                            // for ch in unroll(0,char_set) {
+                            //     if state == s && ch == c {
+                            //         state = d_PFAC_table(s * char_set + ch);
+                            //         break()                                    ;
+                            //     }
+                            // }
+                        if state == trap_state {
+                            break()
+                        }
+                        if state <= num_finalState {
+                            matching(j) = state;
+                        }
+                        pos = pos + 1;
+                    }//while
+                }//if
+                
+            }
+        }
+
+        start = b_id * blocksize * 4 + t_id;
+
+        if b_id < num_blocks_minus1 {
+            for j in unroll(0,4) {
+                d_match_result(start) = matching(j);
+                start = start + blocksize;
+            }
+        }
+        else {
+            for j in unroll(0,4){
+                
+                if start >= input_size {
+                    return()
+                }
+                d_match_result(start) = matching(j);
+                start = start + blocksize;
+            }       
+        }
+    }
+ );
+}
+
+
+fn spec_match_naive(@d_patterns : &[u8],
+    @p_sizes : &[i32],
+    @p_num : i32,
+    @blocksize : i32,
+    @gridsize_x : i32,
+    @gridsize_y : i32,
+    @extrasize_tb : i32,
+    d_input_string : &[i32], 
+    input_size : i32,
+    n_hat : i32,  
+    num_blocks_minus1 : i32,
+    d_match_result : &mut[i32]) -> () {
+
+        //gridsize is overall number of threads
+      let block = (blocksize,1,1);
+      let grid = (gridsize_x * block(0),gridsize_y,1);
+      cuda(0,grid,block,|| {
+        let trap_state = -1;
+        let t_id = cuda_threadIdx_x();
+        let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+        let mut start = b_id * blocksize + t_id;
+
+        //array to store match results
+        // let mut matching = [0,0,0,0];
+
+        let s_Input = reserve_shared[i32](blocksize + extrasize_tb);
+
+        if b_id > num_blocks_minus1 {
+            return()
+        }
+
+        //cast to char
+        let c_Input = bitcast[&mut[3][u8]](s_Input);
+        
+        if start < n_hat {
+            s_Input(t_id) = d_input_string(start);
+        }
+
+        start = start + blocksize;
+
+        if (start < n_hat) && (t_id < extrasize_tb) {
+            s_Input(t_id + blocksize) = d_input_string(start);
+        }
+
+        cuda_syncthreads();
+
+        let bdy = input_size - b_id * blocksize * 4;
+
+//         //run corasick
+//unroll vs range
+        
+        start = b_id * blocksize * 4 + t_id;
+
+        for j in range(0,4) {
+            let mut offset = 0;
+            // let mut match_result = 0u8;
+            
+            let mut matching = 0;
+            let pos = t_id + j * blocksize;
+            let mut c = 0u8;
+
+            if pos < bdy {
+                
+                
+                for i in unroll(0,p_num){
+
+                    let mut pos_in = pos;
+                    let mut matched = 1;
+                    
+                    if pos_in < bdy - p_sizes(i) + 1 {
+
+                        for ii in unroll(0,p_sizes(i)){
+                            
+                            c = (c_Input(pos_in));
+                            if c != d_patterns(offset + ii){
+                                matched = 0;
+                                break()
+                            }
+                    
+                            pos_in = pos_in + 1;
+                        }
+                    }else {
+                        matched = 0;
+                    }
+                    offset = offset + p_sizes(i);
+                    
+                    if matched != 0 {
+                    // result_buf(t_id) = i as u8 + 1u8;
+                        matching = i + 1;
+                    }
+                }
+            }
+
+            if b_id < num_blocks_minus1 {
+                d_match_result(start) = matching;
+                start = start + blocksize;
+            }else {
+                if start >= input_size {
+                    return()
+                }
+                d_match_result(start) = matching;
+                start = start + blocksize;
+            }
+
+        }
+
+        //write result        
+        // start = b_id * blocksize * 4 + t_id;
+
+        // if b_id < num_blocks_minus1 {
+
+        //     for j in unroll(0,4) {
+        //         d_match_result(start) = matching(j);
+        //         start = start + blocksize;
+        //     }
+        
+        // }
+        // else {
+
+        //     for j in unroll(0,4){
+                
+        //         if start >= input_size {
+        //             return()
+        //         }
+        //         d_match_result(start) = matching(j);
+        //         start = start + blocksize;
+        //     }       
+        // }
+    }
+ );
+}
+
+
+
+fn spec_match_global(d_PFAC_table : &[i32],
+    @char_set : i32,
+    @blocksize : i32,
+    @gridsize_x : i32,
+    @gridsize_y : i32,
+    @extrasize_tb : i32,
+    d_input_string : &[i32], 
+    input_size : i32,
+    @n_hat : i32, 
+    @num_finalState : i32, 
+    @initial_state : i32, 
+    num_blocks_minus1 : i32,
+    d_match_result : &mut[i32]) -> () {
+
+        //gridsize is overall number of threads
+      let block = (blocksize,1,1);
+      let grid = (gridsize_x * block(0),gridsize_y,1);
+      cuda(0,grid,block,|| {
+        let trap_state = -1;
+        let t_id = cuda_threadIdx_x();
+        let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+        let mut start = b_id * blocksize + t_id;
+
+        let mut matching = [0,0,0,0];
+
+        let s_Input = reserve_shared[i32](blocksize + extrasize_tb);
+
+        //cant be actually
+        if b_id > num_blocks_minus1 {
+            return()
+        }
+
+        //cast to char
+        let c_Input = bitcast[&mut[3][u8]](s_Input);
+        
+        if start < n_hat {
+            s_Input(t_id) = d_input_string(start);
+        }
+
+        start = start + blocksize;
+
+        if (start < n_hat) && (t_id < extrasize_tb) {
+            s_Input(t_id + blocksize) = d_input_string(start);
+        }
+
+        cuda_syncthreads();
+
+        let bdy = input_size - b_id * blocksize * 4;
+
+
+        for j in range(0,4) {
+            let mut pos = t_id + j * blocksize;
+            if pos < bdy {
+                let mut c : i32 = bitcast[i32](c_Input(pos)); //dynamic :(
+                let mut state = trap_state;
+                state = d_PFAC_table(initial_state * char_set + c);
+
+                if trap_state != state {
+                    if state <= num_finalState {
+                        matching(j) = state;
+                    }
+                    pos = pos + 1;
+
+                    while pos < bdy {
+
+                        c = bitcast[i32](c_Input(pos));
+                        state = d_PFAC_table(state * char_set + c);
+                            // for ch in unroll(0,char_set) {
+                            //     if state == s && ch == c {
+                            //         state = d_PFAC_table(s * char_set + ch);
+                            //         break()                                    ;
+                            //     }
+                            // }
+                        if state == trap_state {
+                            break()
+                        }
+                        if state <= num_finalState {
+                            matching(j) = state;
+                        }
+                        pos = pos + 1;
+                    }//while
+                }//if
+                
+            }
+        }
+
+        start = b_id * blocksize * 4 + t_id;
+
+        if b_id < num_blocks_minus1 {
+            for j in unroll(0,4) {
+                d_match_result(start) = matching(j);
+                start = start + blocksize;
+            }
+        }
+        else {
+            for j in unroll(0,4){
+                
+                if start >= input_size {
+                    return()
+                }
+                d_match_result(start) = matching(j);
+                start = start + blocksize;
+            }       
+        }
+    }
+ );
+}
+
+
+
+fn spec_match_compressed(@states : &[i32],
+    @chars : &[i32],
+    @offsets : &[i32],
+    @sizes : &[i32],
+    @char_set : i32,
+    @num_states : i32,
+    @blocksize : i32,
+    @gridsize_x : i32,
+    @gridsize_y : i32,
+    @extrasize_tb : i32,
+    d_input_string : &[i32], 
+    input_size : i32,
+    n_hat : i32, 
+    @num_finalState : i32, 
+    @initial_state : i32, 
+    num_blocks_minus1 : i32,
+    d_match_result : &mut[i32]) -> () {
+
+        //gridsize is overall number of threads
+      let block = (blocksize,1,1);
+      let grid = (gridsize_x * block(0),gridsize_y,1);
+      cuda(0,grid,block,|| {
+        let trap_state = -1;
+        let t_id = cuda_threadIdx_x();
+        let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+        let mut start = b_id * blocksize + t_id;
+
+        // let mut matching = [0,0,0,0];
+
+        let s_Input = reserve_shared[i32](blocksize + extrasize_tb);
+
+        if b_id > num_blocks_minus1 {
+            return()
+        }
+
+        //cast to char
+        let c_Input = bitcast[&mut[3][u8]](s_Input);
+        
+        if start < n_hat {
+            s_Input(t_id) = d_input_string(start);
+        }
+
+        start = start + blocksize;
+
+        if (start < n_hat) && (t_id < extrasize_tb) {
+            s_Input(t_id + blocksize) = d_input_string(start);
+        }
+
+        cuda_syncthreads();
+
+        let bdy = input_size - b_id * blocksize * 4;
+
+        start = b_id * blocksize * 4 + t_id;
+
+        for j in range(0,4) {
+            
+            let mut pos = t_id + j * blocksize;
+            let mut matching = 0;
+
+            if pos < bdy {
+                let mut c : i32 = bitcast[i32](c_Input(pos)); //dynamic :(
+                let mut state = trap_state;
+                for i in unroll(0,sizes(initial_state - 1)){
+                    let offset = offsets(initial_state - 1);
+                    if c == chars(offset + i) {
+                        state = states(offset + i);
+                        break()
+                    }
+                }
+
+                if trap_state != state {
+                    if state <= num_finalState {
+                        matching = state;
+                    }
+                    pos = pos + 1;
+
+                    while pos < bdy {
+
+                        c = bitcast[i32](c_Input(pos));
+
+                        let tmp_state = state;
+                        state = trap_state;
+
+                        for s in unroll(1,num_states) {
+
+                            if tmp_state == s {
+                                for i in unroll(0,sizes(s - 1)){
+                                    let offset = offsets(s - 1);
+                                    if c == chars(offset + i) {
+                                        state = states(offset + i);
+                                        break()
+                                    }
+                                }
+                                break()
+                            }
+                        }
+
+                        if state == trap_state {
+                            break()
+                        }
+                        if state <= num_finalState {
+                            matching = state;
+                        }
+                        pos = pos + 1;
+                    }//while
+                }//if
+                
+            }
+            // if b_id < num_blocks_minus1 {
+                // d_match_result(start) = matching;
+                // start = start + blocksize;
+            // } else{
+            if start >= input_size {
+                    return()
+            }else {
+                d_match_result(start) = matching;
+                start = start + blocksize;
+            }
+            // }
+        }
+
+        // start = b_id * blocksize * 4 + t_id;
+
+        // if b_id < num_blocks_minus1 {
+        //     for j in unroll(0,4) {
+        //         d_match_result(start) = matching(j);
+        //         start = start + blocksize;
+        //     }
+        // }
+        // else {
+        //     for j in unroll(0,4){
+                
+        //         if start >= input_size {
+        //             return()
+        //         }
+        //         d_match_result(start) = matching(j);
+        //         start = start + blocksize;
+        //     }       
+        // }
+    }
+ );
+}
+
+
+// fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : i32, ibuffer : &[u8], ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, block_num : i32) -> (){
+    
+//     let block = (block_size,1,1);
+//     // let math = cpu_intrinsics;
+//     // let block_num : i32 = (ibuffer_size + block(0) as i64 - 1i64 / block(0) as i64) as i32; 
+//                 //can be p'ed;
+//     let p : i32 = (block_num / 32768); //2 >> 15
+    
+//     print_string("p is ");
+//     print_i32(p);
+//     print_string("\n");
+
+//     let mut threads = 0;
+//     if p > 0 {
+//          threads = (32768) * block(0);
+//     } else {
+//          threads = block_num * block(0);
+//     }
+    
+//     let grid = (threads, p + 1,1);
+
+//     print_string("grid is ");
+//     print_i32(grid(0));
+//     print_string("\n");
+
+
+//     // let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+//     // let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+//                 //g x g blocks;
+//     // let grid = (g * block(0),g,1);
+
+//     cuda(0,grid,block, || {
+        
+//         // let t_id : i64 = threadId();
+//         // let t_id = cuda_threadIdx_x();
+//         let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+//         let t_id = b_id * block_size + cuda_threadIdx_x(); 
+
+//         if t_id < ibuffer_size {
+            
+//             // result_buf(t_id) = 0u8;
+//             // let mut matched = 0u8;
+//             // let mut match_result = 0u8;
+//             // let mut start = 0;
+
+//             // for i in unroll(0,t_num as i32){
+//             //     matched = match_internal(template,start,start + t_sizes(i),i as u8 + 1u8,t_id,0,ibuffer,result_buf);
+//             //     start = start + t_sizes(i);
+//             //     if matched != 0u8 {
+//             //         match_result = matched;
+//             //     }
+//             // }
+//             let mut offset = 0;
+//             let mut match_result = 0;
+//             for i in unroll(0,t_num){ //for each pattern
+//                 let mut matched = 1;
+                
+//                 for j in unroll(0,t_sizes(i)){
+//                     if ibuffer(t_id + j) != template(offset + j){
+//                         matched = 0;
+//                         break()
+//                     }
+//                 }
+//                 offset = offset + t_sizes(i);
+//                 if matched != 0 {
+//                     match_result = i + 1;
+//                 }
+//             }
+//             result_buf(t_id) = match_result;
+//         }
+//     });
+
+// }
+
+fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : i32, ibuffer : &[u8], ibuffer_size : i32, result_buf : &mut[i32], @block_size : i32, block_num : i32) -> (){
+    
+    let block = (block_size,1,1);
+    // let math = cpu_intrinsics;
+    // let block_num : i32 = (ibuffer_size + block(0) as i64 - 1i64 / block(0) as i64) as i32; 
+                //can be p'ed;
+    let p : i32 = (block_num / 32768); //2 >> 15
+    let mut threads = 0;
+    if p > 0 {
+         threads = (32768) * block(0);
+    } else {
+         threads = block_num * block(0);
+    }
+    
+    let grid = (threads, p+1,1);
+
+
+    // let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
+    // let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+                //g x g blocks;
+    // let grid = (g * block(0),g,1);
+
+    cuda(0,grid,block, || {
+        
+        // let t_id : i32 = threadId();
+        // let t_id = cuda_threadIdx_x();
+        let b_id = cuda_blockIdx_y() * cuda_gridDim_x() + cuda_blockIdx_x();
+        let t_id = b_id * block_size + cuda_threadIdx_x(); 
+
+        if t_id < ibuffer_size {
+            
+            // result_buf(t_id) = 0u8;
+            // let mut matched = 0u8;
+            // let mut match_result = 0u8;
+            // let mut start = 0;
+
+            // for i in unroll(0,t_num as i32){
+            //     matched = match_internal(template,start,start + t_sizes(i),i as u8 + 1u8,t_id,0,ibuffer,result_buf);
+            //     start = start + t_sizes(i);
+            //     if matched != 0u8 {
+            //         match_result = matched;
+            //     }
+            // }
+            let mut offset = 0;
+            let mut match_result = 0;
+            for i in unroll(0,t_num){ //for each pattern
+                let mut matched = 1;
+
+                if t_id + t_sizes(i) - 1 < ibuffer_size {
+                
+                    for j in unroll(0,t_sizes(i)){
+                    // if (t_id + t_sizes(i) - 1 >= ibuffer_size){
+                        // matched = 0;
+                        // break()
+                    // } else if (ibuffer(t_id + j) != template(offset + j)) {
+                        // matched = 0;
+                        // break()
+                    // }
+                        if(ibuffer(t_id + j) != template(offset + j)) {
+                            matched = 0;
+                            break()
+                        }
+                    }
+                } else {
+                    matched = 0;
+                }
+                offset = offset + t_sizes(i);
+                if matched != 0 {
+                    match_result = i + 1;
+                }
+            // }
+        }
+        result_buf(t_id) = match_result;
+        
+        }
+    });
+
+}

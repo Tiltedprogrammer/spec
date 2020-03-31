@@ -6,5 +6,13 @@ else()
     add_definitions(-DBLOCK_SIZE=1024)    
 endif()
 
+anydsl_runtime_wrap(IMPALA_TEST
+    FILES test.impala)
 
-add_executable(match.out main.cu)
+add_executable(test.out test.cpp ${IMPALA_TEST})
+
+add_executable(match.out main.cpp utils.cpp kernels.cu)
+
+target_include_directories(match.out PUBLIC ${CUDA_INCLUDE_DIRS} ../include)
+
+# target_compile_options(match.out PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O4 -arch=sm_75>)

@@ -3,7 +3,7 @@
 #include <cassert>
 
 // CUDA runtime
-// #include <cuda_runtime.h>
+#include <cuda_runtime.h>
 
 #define cimg_use_jpeg
 
