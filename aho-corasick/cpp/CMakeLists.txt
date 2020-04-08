@@ -51,7 +51,7 @@ endif()
 
 #test
 # add_definitions(-DBENCHMARK)
-cuda_add_executable(test test.cpp
+cuda_add_executable(RunTest test.cpp
                          spec_match.cpp
                          ../../matching/impala/match_wrappers.cpp 
                          ../../matching/cpp/utils.cpp 
@@ -59,11 +59,13 @@ cuda_add_executable(test test.cpp
                          spec-kernels/ImpalaCorasickCuda.cu 
                          spec-kernels/ImpalaNaiveCuda.cu
                          spec-kernels/ImpalaNaiveOpt.cu
-                         spec-kernels/CudaNaiveOpt.cu 
+                         spec-kernels/CudaNaiveOpt.cu
+                         spec-kernels/CudaSpecManualOpt.cu
+                         spec-kernels/CudaSpecManualOptNU.cu
                          ${FUN_INCLUDE_FILE})
 
-target_link_libraries(test ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(test PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} spec-kernels/ ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(RunTest ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
+target_include_directories(RunTest PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} spec-kernels/ ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
 
 # #benchmark NaiveImpalaVsPfac
 # cuda_add_executable(PfacVsImpalaNaive NaiveImpalaVsPfac.cpp spec_match.cpp ../../matching/impala/match_wrappers.cpp ../../matching/cpp/utils.cpp ../../matching/cpp/kernels.cu ${FUN_INCLUDE_FILE})
@@ -94,7 +96,7 @@ target_include_directories(test PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} 
 
 # Impala naive
 
-SET(SPEC_KERNELS spec-kernels/ImpalaNaiveCuda.cu spec-kernels/ImpalaNaiveOpt.cu spec-kernels/ImpalaCorasickCuda.cu spec-kernels/CudaNaiveOpt.cu)
+SET(SPEC_KERNELS spec-kernels/ImpalaNaiveCuda.cu spec-kernels/ImpalaNaiveOpt.cu spec-kernels/ImpalaCorasickCuda.cu spec-kernels/CudaNaiveOpt.cu spec-kernels/CudaSpecManualOpt.cu spec-kernels/CudaSpecManualOptNU.cu)
 
 cuda_add_executable(ImpalaNaive
                     ImpalaNaive.cpp 
@@ -160,6 +162,31 @@ cuda_add_executable(CudaNaiveOpt
 
 target_link_libraries(CudaNaiveOpt ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
 target_include_directories(CudaNaiveOpt PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+
+
+cuda_add_executable(CudaNaiveOptSpec 
+                    CudaSpecManual.cpp 
+                    spec_match.cpp 
+                    ../../matching/impala/match_wrappers.cpp 
+                    ../../matching/cpp/utils.cpp 
+                    ../../matching/cpp/kernels.cu
+                    ${SPEC_KERNELS}
+                    ${FUN_INCLUDE_FILE})
+
+target_link_libraries(CudaNaiveOptSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
+target_include_directories(CudaNaiveOptSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+
+cuda_add_executable(CudaNaiveOptSpecNU 
+                    CudaSpecManualNU.cpp 
+                    spec_match.cpp 
+                    ../../matching/impala/match_wrappers.cpp 
+                    ../../matching/cpp/utils.cpp 
+                    ../../matching/cpp/kernels.cu
+                    ${SPEC_KERNELS}
+                    ${FUN_INCLUDE_FILE})
+
+target_link_libraries(CudaNaiveOptSpecNU ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
+target_include_directories(CudaNaiveOptSpecNU PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
 
 
 # # target_link_libraries(simple.out ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})

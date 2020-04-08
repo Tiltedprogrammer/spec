@@ -47,4 +47,8 @@ void impalaNaiveOptWrapper(dim3 grid, dim3 block, int* d_input_string, int* d_ma
 
 void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_sizes, int p_num, const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
+void matchNaiveSpecManualOptWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+
+void matchNaiveSpecManualOptNUWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+
 #endif

@@ -43,8 +43,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// To enable assertions do cmake .. -DCMAKE_BUILD_TYPE=Debug
 #include <assert.h>
 
 // split
@@ -65,30 +63,6 @@
 
 #include "spec_match.hpp"
 
-
-#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
-
-inline void __cudaCheckError( const char *file, const int line )
-{
-    cudaError err = cudaGetLastError();
-    if ( cudaSuccess != err )
-    {
-        fprintf( stderr, "cudaCheckError() failed at %s:%i : %s\n",
-                 file, line, cudaGetErrorString( err ) );
-        exit( -1 );
-    }
-
-    // More careful checking. However, this will affect performance.
-    // Comment away if needed.
-    err = cudaDeviceSynchronize();
-    if( cudaSuccess != err )
-    {
-        fprintf( stderr, "cudaCheckError() with sync failed at %s:%i : %s\n",
-                 file, line, cudaGetErrorString( err ) );
-        exit( -1 );
-    }
-    return;
-}
 
 std::vector<std::string> split (const std::string &s, char delim) {
     std::vector<std::string> result;
@@ -163,91 +137,14 @@ int main(int argc, char **argv)
     input_size = fread (h_inputString, 1, input_size, fpin);
     fclose(fpin);
 
-
-    // free(h_matched_result);
-    // free(h_inputString);
-    // h_matched_result = NULL;
-     
-    // memset(h_matched_result,0,input_size * sizeof(int));
-
-
-    // std::vector<std::string> vpatterns;
-
-    // for (int i = 0; i < handle->numOfPatterns; i++) {
-    //     vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
-    // }
-
-    // char * h_char_matched = new char[input_size];
     spec_match_from_host(handle,h_inputString,input_size,h_matched_result,10);
 
-    // h_matched_result[0] = 44;
-
-    std::vector<std::pair<int,int>> resImpala;
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    // // free(h_inputString);
-    // h_inputString = NULL;
-
-    
-    for (int i = 0; i < input_size; i++) {
-        // if (h_char_matched[i] != 0) {
-            if(h_matched_result[i] != 0){
-            printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-            resImpala.push_back(std::pair(i,h_matched_result[i]));
-            // resImpala.emplace_back(i,h_char_matched[i]);
-        }
-    }
-
-    // delete[] (h_char_matched);
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    // multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
-
-    memset(h_matched_result,0,input_size * sizeof(int));
-
-    PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
-    if ( PFAC_STATUS_SUCCESS != PFAC_status ){
-        printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
-        exit(1) ;	
-    }         
-    // spec_match_from_host(handle,h_inputString,input_size,h_matched_result,6);
-
-    std::cout << "PFAC" << std::endl;
-
-
-    std::vector<std::pair<int,int>> resPfac;
-    
-    for (int i = 0; i < input_size; i++) {
-        if (h_matched_result[i] != 0) {
-            printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-            resPfac.push_back(std::pair(i,h_matched_result[i]));
-        }
-    }
-    // for (int i = 0; i < input_size; i++) {
-    //     // if (h_char_matched[i] != 0) {
-    //         if(h_matched_result[i] != 0){
-    // //         // printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-    //         resImpala.push_back(std::pair(i,h_matched_result[i]));
-    //         // resImpala.emplace_back(i,h_char_matched[i]);
-    //     }
-    // }
-
-    // free(h_inputString);
-    // free(h_matched_result);
-
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-     
-
-    std::cout << resImpala.size() << " " << resPfac.size() << std::endl;
-
-    // std::cout << "Pattern # 5" << handle->rowPtr[handle->] << std::endl;
-
-    assert(resPfac == resImpala);
-
+        
     PFAC_status = PFAC_destroy( handle ) ;
     assert( PFAC_STATUS_SUCCESS == PFAC_status );
     
-
     free(h_inputString);
-    free(h_matched_result);
+    free(h_matched_result); 
             
     return 0;
 }
