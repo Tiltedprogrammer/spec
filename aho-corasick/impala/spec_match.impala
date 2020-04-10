@@ -172,7 +172,8 @@ fn spec_match_naive(@d_patterns : &[u8],
 
         cuda_syncthreads();
 
-        let bdy = input_size - b_id * blocksize * 4;
+        let bdy_ = input_size - b_id * blocksize * 4;
+        let bdy = if (extrasize_tb + block_size) * 4 > bdy_ { bdy_} else {(extrasize_tb + block_size) * 4}
 
 //         //run corasick
 //unroll vs range
@@ -195,7 +196,7 @@ fn spec_match_naive(@d_patterns : &[u8],
                     let mut pos_in = pos;
                     let mut matched = 1;
                     
-                    if pos_in < bdy - p_sizes(i) + 1 {
+                    if pos_in < (block_size + extrasize_tb) * 4 - p_sizes(i) + 1 {
 
                         for ii in unroll(0,p_sizes(i)){
                             

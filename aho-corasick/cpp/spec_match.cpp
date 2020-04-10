@@ -92,6 +92,8 @@ int spec_match_from_host(PFAC_handle_t handle, char* h_input_string, size_t inpu
         spec_match_from_device<9>(handle, d_input_string, input_size,d_matched_result);
     } else if (algorithm == 10) {
         spec_match_from_device<10>(handle, d_input_string, input_size,d_matched_result);
+    } else if (algorithm) {
+        spec_match_from_device<11>(handle, d_input_string, input_size,d_matched_result);
     }
     // if ( PFAC_STATUS_SUCCESS != PFAC_status ){
     //     cudaFree(d_input_string);
@@ -503,6 +505,9 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
     } else if(ALGO == 10) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
         matchNaiveSpecManualOptNUWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+    } else if(ALGO == 11) {
+        dim3 dimBlock = (THREAD_BLOCK_SIZE);
+        matchNaiveSpecManualOptNUBWWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     }
     
 }

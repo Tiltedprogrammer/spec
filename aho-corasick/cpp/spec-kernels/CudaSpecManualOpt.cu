@@ -8,7 +8,7 @@
 
 #define  SUBSEG_MATCH_NOTEX( j, match ) \
     pos = t_id + j * THREAD_BLOCK_SIZE ;\
-    if ( pos < bdy ){ \
+    if ( pos < bdy_ ){ \
         if (pos < bdy - 9 + 1 && s_char[pos] == 0x14\
                               && s_char[pos + 1] == 'f'\
                               && s_char[pos + 2] == 't'\
@@ -329,7 +329,9 @@ __global__ void match_naive_opt_spec_manual(const int* __restrict__ d_input_stri
     }
     __syncthreads();
 
-    int bdy = input_size - ( gbid * THREAD_BLOCK_SIZE * 4 );
+    int bdy_ = input_size - ( gbid * THREAD_BLOCK_SIZE * 4 );
+    int bdy = (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4 > bdy_ ? bdy_ : (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4;
+
 
     int j = 0 ;
 
