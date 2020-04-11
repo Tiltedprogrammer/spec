@@ -92,8 +92,10 @@ int spec_match_from_host(PFAC_handle_t handle, char* h_input_string, size_t inpu
         spec_match_from_device<9>(handle, d_input_string, input_size,d_matched_result);
     } else if (algorithm == 10) {
         spec_match_from_device<10>(handle, d_input_string, input_size,d_matched_result);
-    } else if (algorithm) {
+    } else if (algorithm == 11) {
         spec_match_from_device<11>(handle, d_input_string, input_size,d_matched_result);
+    } else if (algorithm == 12) {
+        spec_match_from_device<12>(handle, d_input_string, input_size,d_matched_result);
     }
     // if ( PFAC_STATUS_SUCCESS != PFAC_status ){
     //     cudaFree(d_input_string);
@@ -179,7 +181,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         //maybe asyncronous read from disk and jit;
 
         std::string dummy;
-        dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32, blocks_minus1 : i32, n_hat :i32) -> (){\n";
+        dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32, blocks_minus1 : i32, n_hat :i32, max_len : i32) -> (){\n";
         dummy += "  spec_match_naive(\"" + patterns +"\"," +
                             "[" + sizes + "]," + 
                             std::to_string(vpatterns.size()) + "i32," +
@@ -191,7 +193,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
                             // std::to_string(input_size) + ", " +
                             // std::to_string(n_hat) + ", " +
                             // std::to_string(num_blocks-1) + ", " +
-                            "blocks_minus1,d_match_result)\n}\n";
+                            "blocks_minus1,max_len,d_match_result)\n}\n";
 
 
     std::string program = std::string((char*)___impala_spec_match_impala) + dummy;
@@ -200,7 +202,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
     
     auto key = anydsl_compile(program.c_str(),program.size(),0);
     
-    typedef void (*function) (const int*,const int *, int, int,int);
+    typedef void (*function) (const int*,const int *, int, int,int,int);
     
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
@@ -211,7 +213,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         std::cout << "succesfully compiled\n";
     }
 
-    call((int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat);
+    call((int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat,handle->maxPatternLen);
 
     }
     else if(ALGO == 2){
@@ -390,7 +392,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         impalaNaiveWrapper(grid,dimBlock,(unsigned char *)d_input_string,d_matched_result,input_size);
     }else if (ALGO == 6) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
-        impalaNaiveOptWrapper(dimGrid,dimBlock,(int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat);
+        impalaNaiveOptWrapper(dimGrid,dimBlock,(int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat,handle->maxPatternLen);
     }else if (ALGO == 7) {
 
         std::vector<std::string> vpatterns;
@@ -492,7 +494,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         // }
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
 
-        matchNaiveOptWrapper(dimGrid,dimBlock,d_patterns,d_sizes,vpatterns.size(),(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+        matchNaiveOptWrapper(dimGrid,dimBlock,d_patterns,d_sizes,vpatterns.size(),(int*)d_input_string,input_size,n_hat,num_blocks-1,handle->maxPatternLen,d_matched_result);
 
         cudaDeviceSynchronize();
         delete[](sizes);
@@ -508,6 +510,9 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
     } else if(ALGO == 11) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
         matchNaiveSpecManualOptNUBWWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+    } else if (ALGO == 12) {
+        dim3 dimBlock = (THREAD_BLOCK_SIZE);
+        matchCorasickSpecWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     }
     
 }

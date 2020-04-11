@@ -8,31 +8,51 @@
 
 #define  SUBSEG_MATCH_NOTEX( j, match ) \
     pos = t_id + j * THREAD_BLOCK_SIZE ;\
-    if ( pos < bdy_ ){ \
-        int offset = 0;\
-        for (int i = 0; i < p_num; i++){\
-            int pos_in = pos;\
-            int matched = 1;\
-            if (pos_in < bdy - p_sizes[i] + 1) {\
+    if ( pos < bdy_ ){\
+        if (pos < bdy - max_len + 1){\
+            int offset = 0;\
+            for (int i = 0; i < p_num; i++){\
+                int pos_in = pos;\
+                int matched = 1;\
                 for(int ii = 0; ii < p_sizes[i]; ii++) {\
-                    inputChar = s_char[pos_in];\
-                    if (inputChar != d_patterns[offset + ii]){\
-                        matched = 0;\
-                        break;\
-                    }\
-                    pos_in += 1;\
+                        inputChar = s_char[pos_in];\
+                        if (inputChar != d_patterns[offset + ii]){\
+                            matched = 0;\
+                            break;\
+                        }\
+                        pos_in += 1;\
                 }\
-            }else {\
-                matched = 0;\
+                offset += p_sizes[i];\
+                if (matched != 0) {\
+                    match = i + 1;\
+                }\
             }\
-            offset += p_sizes[i];\
-            if (matched != 0) {\
-                match = i + 1;\
-            }\
+        }else{\
+                int offset = 0;\
+                for (int i = 0; i < p_num; i++){\
+                    int pos_in = pos;\
+                    int matched = 1;\
+                    if (pos_in < bdy - p_sizes[i] + 1) {\
+                        for(int ii = 0; ii < p_sizes[i]; ii++) {\
+                            inputChar = s_char[pos_in];\
+                            if (inputChar != d_patterns[offset + ii]){\
+                                matched = 0;\
+                                break;\
+                            }\
+                            pos_in += 1;\
+                        }\
+                    }else {\
+                        matched = 0;\
+                    }\
+                    offset += p_sizes[i];\
+                    if (matched != 0) {\
+                        match = i + 1;\
+                    }\
+                }\
         }\
     }
 
-__global__ void match_naive_opt(const char* __restrict__ d_patterns, int* p_sizes, int p_num, const int* __restrict__ d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result) {
+__global__ void match_naive_opt(const char* __restrict__ d_patterns, int* p_sizes, int p_num, const int* __restrict__ d_input_string, int input_size, int n_hat, int num_blocks_minus1, int max_len, int* d_match_result) {
     
     int t_id = threadIdx.x;
     int gbid = blockIdx.y * gridDim.x + blockIdx.x;
@@ -89,6 +109,6 @@ __global__ void match_naive_opt(const char* __restrict__ d_patterns, int* p_size
 
 }
 
-void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_sizes, int p_num, const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result){
-    RUN((match_naive_opt<<<grid,block>>>(d_patterns,p_sizes,p_num,d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_sizes, int p_num, const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1,int max_len, int* d_match_result){
+    RUN((match_naive_opt<<<grid,block>>>(d_patterns,p_sizes,p_num,d_input_string,input_size,n_hat,num_blocks_minus1,max_len,d_match_result)))
 }

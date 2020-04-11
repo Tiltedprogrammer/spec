@@ -43,14 +43,16 @@ void impalaCorasickWrapper(dim3 grid, dim3 block, int* d_input_string, int* d_ma
 
 void impalaNaiveWrapper(dim3 grid, dim3 block, unsigned char* d_input_string, int* d_match_result, int input_size);
 
-void impalaNaiveOptWrapper(dim3 grid, dim3 block, int* d_input_string, int* d_match_result, int input_size,int blocks_minus1,int n_hat);
+void impalaNaiveOptWrapper(dim3 grid, dim3 block, int* d_input_string, int* d_match_result, int input_size,int blocks_minus1,int n_hat,int max_len);
 
-void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_sizes, int p_num, const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_sizes, int p_num, const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1,int max_len, int* d_match_result);
 
 void matchNaiveSpecManualOptWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
 void matchNaiveSpecManualOptNUWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
 void matchNaiveSpecManualOptNUBWWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+
+void matchCorasickSpecWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
 #endif

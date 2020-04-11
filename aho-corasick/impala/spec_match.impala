@@ -137,6 +137,7 @@ fn spec_match_naive(@d_patterns : &[u8],
     input_size : i32,
     n_hat : i32,  
     num_blocks_minus1 : i32,
+    max_len : i32,
     d_match_result : &mut[i32]) -> () {
 
         //gridsize is overall number of threads
@@ -173,49 +174,70 @@ fn spec_match_naive(@d_patterns : &[u8],
         cuda_syncthreads();
 
         let bdy_ = input_size - b_id * blocksize * 4;
-        let bdy = if (extrasize_tb + block_size) * 4 > bdy_ { bdy_} else {(extrasize_tb + block_size) * 4}
+        let bdy = if (extrasize_tb + blocksize) * 4 > bdy_ { bdy_} else {(extrasize_tb + blocksize) * 4};
 
-//         //run corasick
-//unroll vs range
-        
         start = b_id * blocksize * 4 + t_id;
 
         for j in range(0,4) {
             let mut offset = 0;
-            // let mut match_result = 0u8;
             
             let mut matching = 0;
             let pos = t_id + j * blocksize;
             let mut c = 0u8;
 
-            if pos < bdy {
+            if pos < bdy_ {
                 
+                if pos < bdy - max_len + 1 {
                 
-                for i in unroll(0,p_num){
+                    for i in unroll(0,p_num){
 
-                    let mut pos_in = pos;
-                    let mut matched = 1;
-                    
-                    if pos_in < (block_size + extrasize_tb) * 4 - p_sizes(i) + 1 {
-
+                        let mut pos_in = pos;
+                        let mut matched = 1;
+                        
                         for ii in unroll(0,p_sizes(i)){
-                            
-                            c = (c_Input(pos_in));
-                            if c != d_patterns(offset + ii){
-                                matched = 0;
-                                break()
-                            }
-                    
-                            pos_in = pos_in + 1;
+                                
+                                c = (c_Input(pos_in));
+                                if c != d_patterns(offset + ii){
+                                    matched = 0;
+                                    break()
+                                }
+                        
+                                pos_in = pos_in + 1;
                         }
-                    }else {
-                        matched = 0;
+                        
+                        offset = offset + p_sizes(i);
+                        
+                        if matched != 0 {
+                        // result_buf(t_id) = i as u8 + 1u8;
+                            matching = i + 1;
+                        }
                     }
-                    offset = offset + p_sizes(i);
-                    
-                    if matched != 0 {
-                    // result_buf(t_id) = i as u8 + 1u8;
-                        matching = i + 1;
+                } else {
+                    for i in unroll(0,p_num){
+
+                        let mut pos_in = pos;
+                        let mut matched = 1;
+                        
+                        if pos_in < bdy - p_sizes(i) + 1 {
+
+                            for ii in unroll(0,p_sizes(i)){
+                                
+                                c = (c_Input(pos_in));
+                                if c != d_patterns(offset + ii){
+                                    matched = 0;
+                                    break()
+                                }
+                        
+                                pos_in = pos_in + 1;
+                            }
+                        }else {
+                            matched = 0;
+                        }
+                        offset = offset + p_sizes(i);
+                        
+                        if matched != 0 {
+                            matching = i + 1;
+                        }
                     }
                 }
             }
