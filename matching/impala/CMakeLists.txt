@@ -13,7 +13,27 @@ else()
     add_definitions(-DBLOCK_SIZE=1024)    
 endif()
 
+find_library(PFAC_LIB pfac HINTS ${PFAC_LIB_ROOT}/lib)
+
+# target_include_directories(simple.out )
+# set(PFAC_LIB_ROOT "/home/bolkonskiy322_gmail_com/PFAC/PFAC/include")
+
+find_path(PFAC_INCLUDE_DIR
+    NAMES PFAC_P.h
+    PATHS ${PFAC_LIB_ROOT}/include)
+
+if(PFAC_INCLUDE_DIR-NOTFOUND)
+    message(FATAL_ERROR "pfac includes not found")
+else()
+    message("pfac include found at ${PFAC_INCLUDE_DIR}")
+endif(PFAC_INCLUDE_DIR-NOTFOUND)
+
+
 cuda_add_executable(match_spec.out main_spec.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ${NON_JIT_MATCH})
 # add_executable(clean.out test.cu)
 target_include_directories(match_spec.out PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include)
 target_link_libraries(match_spec.out ${AnyDSL_runtime_LIBRARIES})
+
+cuda_add_executable(TestSpec test.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ../cpp/kernels.cu)
+target_include_directories(TestSpec PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include ${PFAC_INCLUDE_DIR})
+target_link_libraries(TestSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})

@@ -80,38 +80,55 @@ __global__ void match_shared(char* pattern, int pattern_size, char* text, long t
     }
 }
 
-__global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int p_number, const char* __restrict__ text, long text_size, char* result_buf) {
+__global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int p_number,int max_len, const char* __restrict__ text, long text_size, char* result_buf) {
 
     long t_id = threadId();
 
     if(t_id < text_size){
+        
         int p_offset = 0;
         int matched = 1;
         int match_result = 0;
+
+        if(t_id < text_size - max_len + 1){
         
-        // result_buf[t_id] = 0;
+            // result_buf[t_id] = 0;
 
-        for(int i = 0; i < p_number; i++) {//for each pattern
-            matched = 1;
-            // if(t_id < text_size - p_sizes[i] + 1) {
-                for(int j = 0; j < p_sizes[i]; j++) {
-
-                    if(t_id >= text_size - p_sizes[i] + 1){
-                        matched = -1;
-                        break;
-                    }
+            for(int i = 0; i < p_number; i++) {//for each pattern
+                matched = 1;
+                // if(t_id < text_size - p_sizes[i] + 1) {
+                    for(int j = 0; j < p_sizes[i]; j++) {
+                    
+                        if(text[t_id + j] != patterns[j+p_offset]) {
+                            matched = -1;
+                            break;
+                        }
+                    } 
                 
-                    if(text[t_id + j] != patterns[j+p_offset]) {
-                        matched = -1;
-                        break;
+                    if(matched == 1) {
+                        match_result = i+1; // 0 stands for missmatch
                     }
-                } 
-            
-                if(matched == 1) {
-                    match_result = i+1; // 0 stands for missmatch
-                }
-            // }
-            p_offset += p_sizes[i];
+                // }
+                p_offset += p_sizes[i];
+            }
+        }else {
+                for(int i = 0; i < p_number; i++) {//for each pattern
+                    matched = 1;
+                    if(t_id < text_size - p_sizes[i] + 1) {
+                        for(int j = 0; j < p_sizes[i]; j++) {
+                        
+                            if(text[t_id + j] != patterns[j+p_offset]) {
+                                matched = -1;
+                                break;
+                            }
+                        } 
+                    
+                        if(matched == 1) {
+                            match_result = i+1; // 0 stands for missmatch
+                        }
+                    }
+                    p_offset += p_sizes[i];                
+            }
         }
         result_buf[t_id] = match_result;             
     }
@@ -121,7 +138,7 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
 __constant__ char mpatterns[128*64];
 __constant__ int cp_sizes[64];
 
-__global__ void match_multy_const(int p_number, char* text, long text_size, char* result_buf) {
+__global__ void match_multy_const(int p_number, int max_len, char* text, long text_size, char* result_buf) {
 
     long t_id = threadId();
 
@@ -131,22 +148,98 @@ __global__ void match_multy_const(int p_number, char* text, long text_size, char
         int match_result = 0;
         // result_buf[t_id] = 0;
 
-        for(int i = 0; i < p_number; i++) {//for each pattern
-            matched = 1;
-            if(t_id < text_size - cp_sizes[i] + 1){
-                for(int j = 0; j < cp_sizes[i]; j++) {
-            
-                    if(text[t_id + j] != mpatterns[j + p_offset]) {
-                        matched = -1;
-                        break;
+        if(t_id < text_size - max_len + 1){
+
+            for(int i = 0; i < p_number; i++) {//for each pattern
+                matched = 1;
+                // if(t_id < text_size - cp_sizes[i] + 1){
+                    for(int j = 0; j < cp_sizes[i]; j++) {
+                
+                        if(text[t_id + j] != mpatterns[j + p_offset]) {
+                            matched = -1;
+                            break;
+                        }
+                    } 
+                
+                    if(matched == 1) {
+                        match_result = i+1; // 0 stands for missmatch
                     }
-                } 
-            
-                if(matched == 1) {
-                    match_result = i+1; // 0 stands for missmatch
-                }
+                // }
+                p_offset += cp_sizes[i];
             }
-            p_offset += cp_sizes[i];
+        }else {
+            for(int i = 0; i < p_number; i++) {//for each pattern
+                matched = 1;
+                if(t_id < text_size - cp_sizes[i] + 1){
+                    for(int j = 0; j < cp_sizes[i]; j++) {
+                
+                        if(text[t_id + j] != mpatterns[j + p_offset]) {
+                            matched = -1;
+                            break;
+                        }
+                    } 
+                
+                    if(matched == 1) {
+                        match_result = i+1; // 0 stands for missmatch
+                    }
+                }
+                p_offset += cp_sizes[i];
+            }
+        }
+        result_buf[t_id] = match_result;             
+    }
+}
+
+
+__global__ void match_multy_const_sizes(const char* __restrict__ patterns, int p_number,int max_len, const char* __restrict__ text, long text_size, char* result_buf) {
+
+    long t_id = threadId();
+
+    if(t_id < text_size){
+        
+        int p_offset = 0;
+        int matched = 1;
+        int match_result = 0;
+
+        if(t_id < text_size - max_len + 1){
+        
+            // result_buf[t_id] = 0;
+
+            for(int i = 0; i < p_number; i++) {//for each pattern
+                matched = 1;
+                // if(t_id < text_size - p_sizes[i] + 1) {
+                    for(int j = 0; j < cp_sizes[i]; j++) {
+                    
+                        if(text[t_id + j] != patterns[j+p_offset]) {
+                            matched = -1;
+                            break;
+                        }
+                    } 
+                
+                    if(matched == 1) {
+                        match_result = i+1; // 0 stands for missmatch
+                    }
+                // }
+                p_offset += cp_sizes[i];
+            }
+        }else {
+                for(int i = 0; i < p_number; i++) {//for each pattern
+                    matched = 1;
+                    if(t_id < text_size - cp_sizes[i] + 1) {
+                        for(int j = 0; j < cp_sizes[i]; j++) {
+                        
+                            if(text[t_id + j] != patterns[j+p_offset]) {
+                                matched = -1;
+                                break;
+                            }
+                        } 
+                    
+                        if(matched == 1) {
+                            match_result = i+1; // 0 stands for missmatch
+                        }
+                    }
+                    p_offset += cp_sizes[i];                
+            }
         }
         result_buf[t_id] = match_result;             
     }
@@ -157,8 +250,10 @@ void multipattern_match_const_wrapper(std::vector<std::string> vpatterns, std::s
     int* sizes = new int[vpatterns.size()];
 
     int len = 0;
+    int max = vpatterns[0].size();
     for(int i = 0; i < vpatterns.size(); i++) {
         sizes[i] = vpatterns[i].size();
+        max = sizes[i] > max ? sizes[i] : max;
         len += sizes[i];     
     }
     
@@ -191,10 +286,19 @@ void multipattern_match_const_wrapper(std::vector<std::string> vpatterns, std::s
     std::cout << "running ..." << "\n";
     time.start();
 
-    grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-    gsqrt = (int)sqrt(grid_size) + 1;
-    dim3 grid(gsqrt,gsqrt);
-    match_multy_const<<<grid,block>>>(vpatterns.size(),dtextptr,text_size,dresult_buf);
+    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    // gsqrt = (int)sqrt(grid_size) + 1;
+    // dim3 grid(gsqrt,gsqrt);
+    int num_blocks = (text_size + block.x - 1) / block.x;
+    int p = num_blocks / 32768;
+    dim3 grid;
+    if(p > 0) {
+        grid.x = 32768;
+        grid.y = p + 1;
+    } else {
+        grid.x = num_blocks;
+    }
+    match_multy_const<<<grid,block>>>(vpatterns.size(),max,dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
     time.stop();
 
@@ -518,8 +622,10 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
     int* sizes = new int[vpatterns.size()];
 
     int len = 0;
+    int max = vpatterns[0].size();
     for(int i = 0; i < vpatterns.size(); i++) {
         sizes[i] = vpatterns[i].size();
+        max = sizes[i] > max ? sizes[i] : max;
         len += sizes[i];    
     }
     
@@ -570,7 +676,7 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
     } else {
         grid.x = num_blocks;
     }
-    match_multy<<<grid,block>>>(dpatterns,dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf);
+    match_multy<<<grid,block>>>(dpatterns,dsizes,vpatterns.size(),max,dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
     time.stop();
 
@@ -600,6 +706,102 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
     cudaFree(dtextptr);
     cudaFree(dpatterns);
     cudaFree(dsizes);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);  
+}
+
+
+void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose,std::vector<std::pair<int,int>> &res ,int res_to_vec){
+
+    int* sizes = new int[vpatterns.size()];
+
+    int len = 0;
+    int max = vpatterns[0].size();
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].size();
+        max = sizes[i] > max ? sizes[i] : max;
+        len += sizes[i];    
+    }
+    
+    int loffset = 0;
+
+    char* dpatterns;
+    int* dsizes;
+
+    char* dtextptr;
+    size_t text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
+    
+    // cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
+    // cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
+    
+    cudaMemcpyToSymbol(cp_sizes, sizes, vpatterns.size() * sizeof(int)); 
+
+    cudaMalloc((void**)&dpatterns, len * sizeof(char));
+    
+    for(int i = 0; i < vpatterns.size(); i++){
+        cudaMemcpy((void*)(dpatterns + loffset*sizeof(char)),vpatterns[i].c_str(),vpatterns[i].size(),cudaMemcpyHostToDevice);
+        loffset += sizes[i];
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    
+    //nochunk only
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+    am::timer time;
+    std::cout << "running ..." << "\n";
+    time.start();
+
+    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    // gsqrt = (int)sqrt(grid_size) + 1;
+    // dim3 grid(gsqrt,gsqrt);
+    int num_blocks = (text_size + block.x - 1) / block.x;
+    int p = num_blocks / 32768;
+    dim3 grid;
+    if(p > 0) {
+        grid.x = 32768;
+        grid.y = p + 1;
+    } else {
+        grid.x = num_blocks;
+    }
+    match_multy_const_sizes<<<grid,block>>>(dpatterns,vpatterns.size(),max,dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
+    time.stop();
+
+    
+    delete[](sizes);
+    
+    
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
+    if(res_to_vec){
+
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+        delete[] (h_match_result);
+    }
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    cudaFree(dpatterns);
+    // cudaFree(dsizes);
     // cudaEventDestroy(start);
     // cudaEventDestroy(stop);  
 }

@@ -505,7 +505,7 @@ fn match_internal(@?t : &[u8],@?start : i32,@?end : i32,id :u8, t_id : i64, i:i3
             }
 */
 
-fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @block_num : i32) -> (){
+fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_len : i32, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @block_num : i32) -> (){
     
     let block = (block_size,1,1); //1024
     // let math = cpu_intrinsics;
@@ -548,25 +548,47 @@ fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, ibuff
             // }
             let mut offset = 0;
             let mut match_result = 0u8;
-            for i in unroll(0,t_num as i32){ //for each pattern
-                let mut matched = 1;
+            
+            if t_id < ibuffer_size - max_len as i64 + 1i64{
+                for i in unroll(0,t_num as i32){ //for each pattern
+                    let mut matched = 1;
                 
-                for j in unroll(0,t_sizes(i)){
-                    if (t_id + t_sizes(i) as i64 - 1i64 >= ibuffer_size){
-                        matched = 0;
-                        break()
+                    for j in unroll(0,t_sizes(i)){
+            
+                        if ibuffer(t_id + j as i64) != template(offset + j){
+                            matched = 0;
+                            break()
+                        }
                     }
-                    if ibuffer(t_id + j as i64) != template(offset + j){
-                        matched = 0;
-                        break()
+                    offset = offset + t_sizes(i);
+                    if matched != 0 {
+                    // result_buf(t_id) = i as u8 + 1u8;
+                        match_result = i as u8 + 1u8;
+                    }
+                }
+        } else{
+            for i in unroll(0,t_num as i32){ //for each pattern
+                
+                let mut matched = 1;
+
+                if t_id < ibuffer_size - t_sizes(i) + 1 {
+            
+                    for j in unroll(0,t_sizes(i)){
+            
+                        if ibuffer(t_id + j as i64) != template(offset + j){
+                            matched = 0;
+                            break()
+                        }
+                    }
+
+                    if matched != 0 {
+                    // result_buf(t_id) = i as u8 + 1u8;
+                        match_result = i as u8 + 1u8;
                     }
                 }
                 offset = offset + t_sizes(i);
-                if matched != 0 {
-                    // result_buf(t_id) = i as u8 + 1u8;
-                    match_result = i as u8 + 1u8;
-                }
             }
+        }
             result_buf(t_id) = match_result;
         }
     })

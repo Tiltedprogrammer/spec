@@ -78,6 +78,8 @@ int main(int argc, char** argv) {
                     multipattern_match_shared_wrapper(patterns,filename,size,offset,verbose,v,0);
                 }else if(alg_name == "mnaivetex"){
                     multipattern_match_texture_wrapper(patterns,filename,size,offset,verbose);
+                }else if(alg_name == "mnavecs"){
+                    multipattern_match_const_sizes_wrapper(patterns, filename, size, offset, verbose,v,0);
                 }
             }
         }else{

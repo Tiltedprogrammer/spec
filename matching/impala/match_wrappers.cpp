@@ -353,6 +353,7 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
         cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
         for (int i = 0; i < text_size; i++){
             if (h_match_result[i]){
+                // printf("At position %4d, match pattern %d\n", i, (int)h_match_result[i]);
                 res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
             }
         }

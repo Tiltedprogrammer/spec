@@ -14,4 +14,6 @@ void match_naive_wrapper(std::string pattern, std::string subject_string_filenam
 
 void multipattern_match_texture_wrapper(std::vector<std::string> vpatterns, std::string subject_string_filename, long size, long offset,int verbose); //nochunk == 0 => nochunk
 
+void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose,std::vector<std::pair<int,int>> &res ,int res_to_vec);
+
 #endif
