@@ -50,9 +50,11 @@ endif()
 
 SET(SPEC_KERNELS spec-kernels/ImpalaNaiveCuda.cu spec-kernels/ImpalaNaiveOpt.cu spec-kernels/ImpalaCorasickCuda.cu spec-kernels/CudaNaiveOpt.cu spec-kernels/CudaSpecManualOpt.cu spec-kernels/CudaSpecManualOptNU.cu spec-kernels/CudaSpecManualOptNUBW.cu spec-kernels/CudaCorasickSpec.cu)
 
-
+SET(JITIFY /home/alekseey_tyurin_gmail_com/specialization/jitify)
+SET(JITIFY_LINK -lcuda -lcudart -lnvrtc)
 #test
-# add_definitions(-DBENCHMARK)
+add_definitions(-DBENCHMARK)
+add_definitions(-JITIFY_THREAD_SAFE=0)
 cuda_add_executable(RunTest test.cpp
                          spec_match.cpp
                          ../../matching/impala/match_wrappers.cpp 
@@ -61,8 +63,8 @@ cuda_add_executable(RunTest test.cpp
                          ${SPEC_KERNELS}
                          ${FUN_INCLUDE_FILE})
 
-target_link_libraries(RunTest ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(RunTest PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} spec-kernels/ ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(RunTest ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(RunTest PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} spec-kernels/ ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 # #benchmark NaiveImpalaVsPfac
 # cuda_add_executable(PfacVsImpalaNaive NaiveImpalaVsPfac.cpp spec_match.cpp ../../matching/impala/match_wrappers.cpp ../../matching/cpp/utils.cpp ../../matching/cpp/kernels.cu ${FUN_INCLUDE_FILE})
@@ -70,7 +72,7 @@ target_include_directories(RunTest PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DI
 # target_link_libraries(PfacVsImpalaNaive ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
 # target_include_directories(PfacVsImpalaNaive PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
 
-# target_compile_options(PfacVsImpalaNaive PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O4 -arch=sm_75>)
+target_compile_options(RunTest PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-pthread>)
 
 # #benchmark ImpalaGlobalVsPfac
 # cuda_add_executable(ImpalaGlobalVsPfac ImpalaCorasickGlobalVsPfac.cpp spec_match.cpp ../../matching/impala/match_wrappers.cpp ../../matching/cpp/utils.cpp ../../matching/cpp/kernels.cu ${FUN_INCLUDE_FILE})
@@ -102,8 +104,8 @@ cuda_add_executable(ImpalaNaive
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(ImpalaNaive ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(ImpalaNaive PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(ImpalaNaive ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(ImpalaNaive PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 # Impala naive opt
 cuda_add_executable(ImpalaNaiveOpt 
@@ -115,8 +117,8 @@ cuda_add_executable(ImpalaNaiveOpt
                     ${SPEC_KERNELS} 
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(ImpalaNaiveOpt ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(ImpalaNaiveOpt PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(ImpalaNaiveOpt ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(ImpalaNaiveOpt PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 # Pfac gloabal
 cuda_add_executable(PfacGlobal 
@@ -128,8 +130,8 @@ cuda_add_executable(PfacGlobal
                     ${SPEC_KERNELS} 
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(PfacGlobal ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(PfacGlobal PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(PfacGlobal ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(PfacGlobal PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 # Impala corasick
 
@@ -142,8 +144,8 @@ cuda_add_executable(ImpalaCorasick
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(ImpalaCorasick ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(ImpalaCorasick PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(ImpalaCorasick ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(ImpalaCorasick PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 
 cuda_add_executable(CudaNaiveOpt 
@@ -155,8 +157,8 @@ cuda_add_executable(CudaNaiveOpt
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(CudaNaiveOpt ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(CudaNaiveOpt PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(CudaNaiveOpt ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(CudaNaiveOpt PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 
 cuda_add_executable(CudaNaiveOptSpec 
@@ -168,8 +170,8 @@ cuda_add_executable(CudaNaiveOptSpec
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(CudaNaiveOptSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(CudaNaiveOptSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(CudaNaiveOptSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(CudaNaiveOptSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 cuda_add_executable(CudaNaiveOptSpecNU 
                     CudaSpecManualNU.cpp 
@@ -180,8 +182,8 @@ cuda_add_executable(CudaNaiveOptSpecNU
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(CudaNaiveOptSpecNU ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(CudaNaiveOptSpecNU PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(CudaNaiveOptSpecNU ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(CudaNaiveOptSpecNU PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 cuda_add_executable(CudaNaiveOptSpecNUBW 
                     CudaSpecManualNUBW.cpp 
@@ -192,8 +194,8 @@ cuda_add_executable(CudaNaiveOptSpecNUBW
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(CudaNaiveOptSpecNUBW ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(CudaNaiveOptSpecNUBW PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
+target_link_libraries(CudaNaiveOptSpecNUBW ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(CudaNaiveOptSpecNUBW PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
 
 cuda_add_executable(CudaCorasickSpec 
                     CudaCorasickSpec.cpp 
@@ -204,9 +206,9 @@ cuda_add_executable(CudaCorasickSpec
                     ${SPEC_KERNELS}
                     ${FUN_INCLUDE_FILE})
 
-target_link_libraries(CudaCorasickSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
-target_include_directories(CudaCorasickSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala)
-
+target_link_libraries(CudaCorasickSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_include_directories(CudaCorasickSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
+target_compile_options(CudaCorasickSpec PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-pthread>)
 
 
 

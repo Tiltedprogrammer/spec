@@ -4,7 +4,15 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include <string>
 
+
+#include <PFAC.h>
+
+#include "PFAC_P.h"
+
+// cuda jit library
+#include "jitify.hpp"
 // #include "cuda_runtime.h"
 
 #define ITERATIONS 20
@@ -49,10 +57,10 @@ void matchNaiveOptWrapper(dim3 grid, dim3 block,const char* d_patterns, int* p_s
 
 void matchNaiveSpecManualOptWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
-void matchNaiveSpecManualOptNUWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+void matchNaiveSpecManualOptNUWrapper(PFAC_handle_t handle,dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
-void matchNaiveSpecManualOptNUBWWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+void matchNaiveSpecManualOptNUBWWrapper(PFAC_handle_t handle,dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
-void matchCorasickSpecWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
+void matchCorasickSpecWrapper(PFAC_handle_t handle,dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result);
 
 #endif

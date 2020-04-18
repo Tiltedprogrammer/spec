@@ -506,13 +506,13 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         matchNaiveSpecManualOptWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     } else if(ALGO == 10) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
-        matchNaiveSpecManualOptNUWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+        matchNaiveSpecManualOptNUWrapper(handle,dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     } else if(ALGO == 11) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
-        matchNaiveSpecManualOptNUBWWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+        matchNaiveSpecManualOptNUBWWrapper(handle,dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     } else if (ALGO == 12) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
-        matchCorasickSpecWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+        matchCorasickSpecWrapper(handle,dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     }
     
 }

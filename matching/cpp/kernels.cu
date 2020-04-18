@@ -97,7 +97,8 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
             for(int i = 0; i < p_number; i++) {//for each pattern
                 matched = 1;
                 // if(t_id < text_size - p_sizes[i] + 1) {
-                    for(int j = 0; j < p_sizes[i]; j++) {
+                    int size = p_sizes[i];
+                    for(int j = 0; j < size; j++) {
                     
                         if(text[t_id + j] != patterns[j+p_offset]) {
                             matched = -1;
@@ -109,13 +110,14 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
                         match_result = i+1; // 0 stands for missmatch
                     }
                 // }
-                p_offset += p_sizes[i];
+                p_offset += size;
             }
         }else {
                 for(int i = 0; i < p_number; i++) {//for each pattern
                     matched = 1;
-                    if(t_id < text_size - p_sizes[i] + 1) {
-                        for(int j = 0; j < p_sizes[i]; j++) {
+                    int size = p_sizes[i];
+                    if(t_id < text_size - size + 1) {
+                        for(int j = 0; j < size; j++) {
                         
                             if(text[t_id + j] != patterns[j+p_offset]) {
                                 matched = -1;
@@ -127,7 +129,7 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
                             match_result = i+1; // 0 stands for missmatch
                         }
                     }
-                    p_offset += p_sizes[i];                
+                    p_offset += size;                
             }
         }
         result_buf[t_id] = match_result;             

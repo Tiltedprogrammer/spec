@@ -203,9 +203,9 @@ int main(int argc, char **argv)
 
     std::vector<std::pair<int,int>> resImpala;
 
-    // multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     //multipattern_match_const_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    multipattern_match_const_sizes_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    // multipattern_match_const_sizes_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
     
 

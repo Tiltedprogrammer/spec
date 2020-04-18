@@ -6,10 +6,11 @@
     unsigned char s_char[37] = {0};\
     pos = t_id + j * THREAD_BLOCK_SIZE;\
     if (pos < bdy - 37 + 1){\
-        _Pragma("unroll")\
+        /*_Pragma("unroll")\
         for(int i = 0; i < 37; i++){\
             s_char[i] = s_char_i[pos + i];\
-        }\
+        }\*/\
+        unsigned char* s_char = s_char_i + pos;\
         if (s_char[0] == 0x14\
                               && s_char[1] == 'f'\
                               && s_char[2] == 't'\
@@ -298,7 +299,7 @@
                               && s_char[6] == 0x1a\
                               && s_char[7] == 0xe1){\
                               match = 27;}\
-    }else if (pos < bdy_){\
+    }else if (pos < bdy){\
         if (pos < bdy - 9 + 1 && s_char_i[pos + 0] == 0x14\
                               && s_char_i[pos + 1] == 'f'\
                               && s_char_i[pos + 2] == 't'\
@@ -644,6 +645,97 @@ __global__ void match_naive_opt_spec_manual_nu(const int* __restrict__ d_input_s
     
 }
 
-void matchNaiveSpecManualOptNUWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result){
-    RUN((match_naive_opt_spec_manual_nu<<<grid,block>>>(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+void matchNaiveSpecManualOptNUWrapper(PFAC_handle_t handle, dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result){
+
+    std::vector<std::string> vpatterns;
+    
+    for (int i = 0; i < handle->numOfPatterns; i++) {
+        vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
+    }
+
+    std::string kernel;
+    
+    kernel += "naive_spec_manual\n";
+    kernel += "__global__\n";
+    kernel += "void match_naive_opt_spec_manual_nu_jit(const int* __restrict__ d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result) {\n";
+    kernel += "    const int THREAD_BLOCK_SIZE = " + std::to_string(THREAD_BLOCK_SIZE) + ";\n";
+    kernel += "    const int EXTRA_SIZE_PER_TB = " + std::to_string(EXTRA_SIZE_PER_TB) + ";\n";
+    kernel += "    int t_id = threadIdx.x;\n"
+               "    int gbid = blockIdx.y * gridDim.x + blockIdx.x;\n"
+               "    int start = gbid * THREAD_BLOCK_SIZE + t_id;\n"
+               "    int pos;\n"
+               "    __shared__ int s_input[ THREAD_BLOCK_SIZE + EXTRA_SIZE_PER_TB];\n"
+               "    unsigned char *s_char;\n"
+               "    if ( gbid > num_blocks_minus1 ){\n"
+               "        return ;\n"
+               "    }\n"
+               "    s_char = (unsigned char *)s_input;\n"
+               "    if ( start < n_hat ){\n"
+               "        s_input[t_id] = d_input_string[start];\n"
+               "    }\n"
+               "    start += THREAD_BLOCK_SIZE ;\n"
+               "    if ( (start < n_hat) && (t_id < EXTRA_SIZE_PER_TB) ){\n"
+               "        s_input[t_id + THREAD_BLOCK_SIZE] = d_input_string[start];\n"
+               "    }\n"
+               "    __syncthreads();\n"
+               "    int bdy = input_size - ( gbid * THREAD_BLOCK_SIZE * 4 );\n"
+               "    int legal_size = (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4 > bdy ? bdy : (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4;\n"
+               "    start = gbid * (THREAD_BLOCK_SIZE * 4) + t_id ;\n"
+               "    for (int j = 0; j < 4; j++) {\n"
+               "        int match = 0;\n"
+               "        unsigned char prefetched_char[" + std::to_string(handle->maxPatternLen) + "] = {0};\n"
+               "        pos = t_id + j * THREAD_BLOCK_SIZE;\n"
+               "        if (pos < legal_size -" + std::to_string(handle->maxPatternLen) + " + 1){\n"
+               "            #pragma unroll\n"
+               "            for (int i = 0; i < " + std::to_string(handle->maxPatternLen) + "; i++){\n"
+               "                prefetched_char[i] = s_char[pos + i];\n"
+               "            }\n";
+    for (int i = 0; i < vpatterns.size(); i++){
+        auto pattern = vpatterns[i];
+        std::string if_clause = "           if (";
+        for (int j = 0; j < pattern.size() - 1; j++){
+            if_clause += "prefetched_char[" + std::to_string(j) + "] == " + std::to_string((int)((unsigned char)pattern[j])) + " && ";
+        }
+        if_clause += "prefetched_char[" + std::to_string(pattern.size() - 1) + "] == " + std::to_string((int)((unsigned char)pattern[pattern.size() - 1])) + "){\n"
+                     "              match = " + std::to_string(i + 1) + ";}\n";
+        kernel += if_clause;
+    }
+
+    kernel += "} else if(pos < legal_size){\n";
+
+    for (int i = 0; i < vpatterns.size(); i++){
+        auto pattern = vpatterns[i];
+        std::string if_clause = "           if (pos < legal_size - " + std::to_string(pattern.size()) + " + 1 && ";
+        for (int j = 0; j < pattern.size() - 1; j++){
+            if_clause += "s_char[pos + " + std::to_string(j) + "] == " + std::to_string((int)((unsigned char)pattern[j])) + " && ";
+        }
+        if_clause += "s_char[pos + " + std::to_string(pattern.size() - 1) + "] == " + std::to_string((int)((unsigned char)pattern[pattern.size() - 1])) + "){\n"
+                     "              match = " + std::to_string(i + 1) + ";}\n";
+        kernel += if_clause;
+    }
+    kernel += "}\n"
+              "if (gbid < num_blocks_minus1) {\n"
+              "    d_match_result[start] = match;\n"
+              "    start += THREAD_BLOCK_SIZE;\n"
+              "}else {\n"
+              "     if (start >= input_size){\n"
+              "         return;\n"
+              "     }\n"
+              "     d_match_result[start] = match;\n"
+              "     start += THREAD_BLOCK_SIZE;\n"
+              "}\n";
+
+    kernel += "}\n}\n";
+    // std::cout << kernel << std::endl;
+
+    static jitify::JitCache kernel_cache;
+    jitify::Program program = kernel_cache.program(kernel);
+    using jitify::reflection::type_of;
+
+    RUN((program.kernel("match_naive_opt_spec_manual_nu_jit")
+       .instantiate()
+       .configure(grid, block)
+       .launch(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+               
+    // RUN((match_naive_opt_spec_manual_nu<<<grid,block>>>(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
 }

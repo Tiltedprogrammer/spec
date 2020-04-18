@@ -1,11 +1,12 @@
 #include "../spec_match.hpp"
 #include "ImpalaKernels.hpp"
 
+#include <stack>
 
 #define MANUAL_EXPAND_2( X )   { X ; X ; }
 #define MANUAL_EXPAND_4( X )   { MANUAL_EXPAND_2( MANUAL_EXPAND_2( X ) )  }
 
-
+//check pos < bdy
 #define  SUBSEG_MATCH_NOTEX( j, match ) \
     pos = t_id + j * THREAD_BLOCK_SIZE;\
     if(pos < bdy){\
@@ -810,6 +811,142 @@ __global__ void match_corasick_spec(const int* __restrict__ d_input_string, int 
 
 }
 
-void matchCorasickSpecWrapper(dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result){
-    RUN((match_corasick_spec<<<grid,block>>>(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+// void construct_automaton(PFAC_handle_t handle,std::stack<std::pair<int,int>>& pfac_table, std::string& automaton){
+//     if(pfac_table.empty()) return;
+//     std::pair<int,int> p = pfac_table.top();
+//     pfac_table.pop();
+//     for(int i = 0; i < CHAR_SET; i++){
+//         int new_state = handle->h_PFAC_table[p.second * CHAR_SET + i];
+//         if(new_state != TRAP_STATE){
+//             pfac_table.emplace(i,new_state);
+//         }
+//     }
+//     automaton += "if(inputChar == " + std::to_string(p.first) + "){\n";
+//     if(p.second < handle->initial_state){
+//         automaton += "  match = " + std::to_string(p.second) + ";\n";
+//     }
+//     automaton += "  pos = pos + 1;\n"
+//                  "  if(pos < bdy){\n"
+//                  "      inputChar = s_char[pos];\n";
+//     construct_automaton(handle,pfac_table,automaton);
+//     automaton += "}\n}\n";
+// }
+
+void build_automaton(int ch,int state,int depth,PFAC_handle_t handle,std::string& automaton){
+    
+    if(depth){
+        automaton += "else if(inputChar == " + std::to_string(ch) + "){\n";
+        if(state < handle->initial_state){
+            automaton += "  match = " + std::to_string(state) + ";\n";
+        }
+    }else {
+        automaton += "if(inputChar == " + std::to_string(ch) + "){\n";
+        if(state < handle->initial_state){
+            automaton += "  match = " + std::to_string(state) + ";\n";
+        }
+    }
+    std::vector<std::pair<int,int>> states;
+    for(int i = 0; i < CHAR_SET; i++){
+        int new_state = handle->h_PFAC_table[state * CHAR_SET + i];
+        if(new_state != TRAP_STATE){
+            states.emplace_back(i,new_state);
+            // build_automaton(i,new_state,handle,automaton);
+        }
+    }
+    if(!states.empty()){
+        automaton += "  if(pos++ < bdy){\n"
+                     "      inputChar = s_char[pos];\n";
+    }
+
+    int depth_ = 0;
+    for(auto p : states){
+        build_automaton(p.first,p.second,depth_++,handle,automaton);
+    }
+    
+    if(!states.empty()){
+        automaton += "}\n";
+    }
+    automaton += "}\n";
+   
+}
+
+void matchCorasickSpecWrapper(PFAC_handle_t handle,dim3 grid, dim3 block,const int* d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result){
+    std::vector<std::string> vpatterns;
+    
+    for (int i = 0; i < handle->numOfPatterns; i++) {
+        vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
+    }
+
+    std::string kernel;
+    
+    kernel += "naive_spec_manual\n";
+    kernel += "__global__\n";
+    kernel += "void match_naive_opt_spec_manual_corasick_jit(const int* __restrict__ d_input_string, int input_size, int n_hat, int num_blocks_minus1, int* d_match_result) {\n";
+    kernel += "    const int THREAD_BLOCK_SIZE = " + std::to_string(THREAD_BLOCK_SIZE) + ";\n";
+    kernel += "    const int EXTRA_SIZE_PER_TB = " + std::to_string(EXTRA_SIZE_PER_TB) + ";\n";
+    kernel += "    int t_id = threadIdx.x;\n"
+               "    int gbid = blockIdx.y * gridDim.x + blockIdx.x;\n"
+               "    int start = gbid * THREAD_BLOCK_SIZE + t_id;\n"
+               "    int inputChar;\n"
+               "    int pos;\n"
+               "    __shared__ int s_input[ THREAD_BLOCK_SIZE + EXTRA_SIZE_PER_TB];\n"
+               "    unsigned char *s_char;\n"
+               "    if ( gbid > num_blocks_minus1 ){\n"
+               "        return ;\n"
+               "    }\n"
+               "    s_char = (unsigned char *)s_input;\n"
+               "    if ( start < n_hat ){\n"
+               "        s_input[t_id] = d_input_string[start];\n"
+               "    }\n"
+               "    start += THREAD_BLOCK_SIZE ;\n"
+               "    if ( (start < n_hat) && (t_id < EXTRA_SIZE_PER_TB) ){\n"
+               "        s_input[t_id + THREAD_BLOCK_SIZE] = d_input_string[start];\n"
+               "    }\n"
+               "    __syncthreads();\n"
+               "    int bdy = input_size - ( gbid * THREAD_BLOCK_SIZE * 4 );\n"
+            //    "    int legal_size = (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4 > bdy ? bdy : (EXTRA_SIZE_PER_TB + THREAD_BLOCK_SIZE) * 4;\n"
+               "    start = gbid * (THREAD_BLOCK_SIZE * 4) + t_id ;\n"
+               "    for (int j = 0; j < 4; j++) {\n"
+               "        int match = 0;\n"
+               "        pos = t_id + j * THREAD_BLOCK_SIZE;\n"
+               "        if (pos < bdy){\n"
+               "            inputChar = s_char[pos];\n";
+    // std::stack<std::pair<int,int>> states;
+    std::string automaton;
+    
+    int depth_ = 0;
+    for(int i = 0;i < CHAR_SET; i++){
+        if(handle->h_PFAC_table[handle->initial_state * CHAR_SET + i] != TRAP_STATE){
+            // states.emplace(i,handle->h_PFAC_table[handle->initial_state * CHAR_SET + i]);
+            build_automaton(i,handle->h_PFAC_table[handle->initial_state * CHAR_SET + i],depth_++,handle,automaton);
+        }
+    }
+
+    kernel += automaton;
+
+    kernel += "}\n"
+              "if (gbid < num_blocks_minus1) {\n"
+              "    d_match_result[start] = match;\n"
+              "    start += THREAD_BLOCK_SIZE;\n"
+              "}else {\n"
+              "     if (start >= input_size){\n"
+              "         return;\n"
+              "     }\n"
+              "     d_match_result[start] = match;\n"
+              "     start += THREAD_BLOCK_SIZE;\n"
+              "}\n";
+
+    kernel += "}\n}\n";
+    // std::cout << kernel << std::endl;
+
+    static jitify::JitCache kernel_cache;
+    jitify::Program program = kernel_cache.program(kernel);
+    using jitify::reflection::type_of;
+
+    RUN((program.kernel("match_naive_opt_spec_manual_corasick_jit")
+       .instantiate()
+       .configure(grid, block)
+       .launch(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+
+    // RUN((match_corasick_spec<<<grid,block>>>(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
 }
