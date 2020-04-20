@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     input_size = fread (h_inputString, 1, input_size, fpin);
     fclose(fpin);
 
-    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,4);
+    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,2);
     
     PFAC_status = PFAC_destroy( handle ) ;
     assert( PFAC_STATUS_SUCCESS == PFAC_status );

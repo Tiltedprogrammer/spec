@@ -168,43 +168,31 @@ int main(int argc, char **argv)
     // free(h_inputString);
     // h_matched_result = NULL;
      
-    memset(h_matched_result,0,input_size * sizeof(int));
-
+    
 
     // std::vector<std::string> vpatterns;
 
     // for (int i = 0; i < handle->numOfPatterns; i++) {
     //     vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
     // }
-
-    // char * h_char_matched = new char[input_size];
-    // std::cout << "Max pattern length: " << handle->maxPatternLen << std::endl;
-    // std::cout << "Num of states " << handle->numOfStates << std::endl;
-    // std::cout << "Initial state " << handle->initial_state << std::endl;
-    // std::cout << "1st pattern " << handle->h_PFAC_table[92 * 256 + '3'] << std::endl;
-    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,12);
+    
+    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,1);
 
     // h_matched_result[0] = 44;
 
     std::vector<std::pair<int,int>> resImpala;
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    // // free(h_inputString);
-    // h_inputString = NULL;
+    
 
     
     for (int i = 0; i < input_size; i++) {
-        // if (h_char_matched[i] != 0) {
+       
             if(h_matched_result[i] != 0){
             // printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
             resImpala.push_back(std::pair(i,h_matched_result[i]));
-            // resImpala.emplace_back(i,h_char_matched[i]);
         }
     }
 
-    // delete[] (h_char_matched);
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    // multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
-
+    
     memset(h_matched_result,0,input_size * sizeof(int));
 
     PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
@@ -212,8 +200,7 @@ int main(int argc, char **argv)
         printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
         exit(1) ;	
     }         
-    // spec_match_from_host(handle,h_inputString,input_size,h_matched_result,6);
-
+    
     std::cout << "PFAC" << std::endl;
 
 
@@ -225,32 +212,17 @@ int main(int argc, char **argv)
             resPfac.push_back(std::pair(i,h_matched_result[i]));
         }
     }
-    // for (int i = 0; i < input_size; i++) {
-    //     // if (h_char_matched[i] != 0) {
-    //         if(h_matched_result[i] != 0){
-    // //         // printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-    //         resImpala.push_back(std::pair(i,h_matched_result[i]));
-    //         // resImpala.emplace_back(i,h_char_matched[i]);
-    //     }
-    // }
-
-    // free(h_inputString);
-    // free(h_matched_result);
-
-    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-     
-
+    
     std::cout << resImpala.size() << " " << resPfac.size() << std::endl;
 
-    // std::cout << "Pattern # 5" << handle->rowPtr[handle->] << std::endl;
-
+    
     for (int i = 0; i < resImpala.size(); i++) {
         if (resImpala[i] != resPfac[i]) {
             std::cout << resPfac[i].second << std::endl;
             break;
         }
-
     }
+
     assert(resPfac == resImpala);
 
     PFAC_status = PFAC_destroy( handle ) ;

@@ -145,7 +145,14 @@ int main(int argc, char **argv)
     // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,0);
     
 
-    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,5);
+    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,1);
+
+    int match_cout = 0;
+    for (int i = 0; i < input_size; i++) {
+        if(h_matched_result[i] != 0) match_cout++;
+    }
+    std::cout << "Match count: " << match_cout << std::endl;
+
     
     PFAC_status = PFAC_destroy( handle ) ;
     assert( PFAC_STATUS_SUCCESS == PFAC_status );

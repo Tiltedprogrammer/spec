@@ -177,17 +177,23 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         }
     
         std::string patterns;
-        for (auto &vp : vpatterns) patterns += vp;
+        for (auto &vp : vpatterns){
+            for(auto ch : vp){
+                patterns += std::to_string((int)ch);
+                patterns += "u8,";
+            }
+        }
+        patterns.pop_back(); //remove last ',';
         //maybe asyncronous read from disk and jit;
 
         std::string dummy;
-        dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32, blocks_minus1 : i32, n_hat :i32, max_len : i32) -> (){\n";
-        dummy += "  spec_match_naive(\"" + patterns +"\"," +
+        dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32, blocks_minus1 : i32, n_hat :i32, max_len : i32, gx : i32, gy : i32) -> (){\n";
+        dummy += "  spec_match_naive([ "+ patterns +"]," +
                             "[" + sizes + "]," + 
                             std::to_string(vpatterns.size()) + "i32," +
-                            std::to_string(THREAD_BLOCK_SIZE) + ", " +
-                            std::to_string(dimGrid.x) + ", " +
-                            std::to_string(dimGrid.y) + ", " +
+                            std::to_string(THREAD_BLOCK_SIZE) + ",gx,gy, " +
+                            // std::to_string(dimGrid.x) + ", " +
+                            // std::to_string(dimGrid.y) + ", " +
                             std::to_string(EXTRA_SIZE_PER_TB) + ", " +
                             "d_input_string, size, n_hat," +
                             // std::to_string(input_size) + ", " +
@@ -202,7 +208,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
     
     auto key = anydsl_compile(program.c_str(),program.size(),0);
     
-    typedef void (*function) (const int*,const int *, int, int,int,int);
+    typedef void (*function) (const int*,const int *, int, int,int,int,int,int);
     
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
@@ -213,7 +219,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         std::cout << "succesfully compiled\n";
     }
 
-    call((int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat,handle->maxPatternLen);
+    call((int*)d_input_string,d_matched_result,input_size,num_blocks-1,n_hat,handle->maxPatternLen,dimGrid.x,dimGrid.y);
 
     }
     else if(ALGO == 2){
@@ -300,16 +306,16 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
 
 
     std::string dummy;
-    dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32,blocks_minus1 : i32, n_hat : i32) -> (){\n";
+    dummy += "extern fn dummy(d_input_string : &[i32], d_match_result : &mut[i32], size : i32,blocks_minus1 : i32, n_hat : i32,gx : i32, gy : i32) -> (){\n";
     dummy += "  spec_match_compressed([" + states +"]," +
                             "[" + chars + "]," +
                             "[" + offsets + "]," + 
                             "[" + sizes + "]," +
                             std::to_string(char_set) + ", " +
                             std::to_string(handle->numOfStates) + ", " +
-                            std::to_string(THREAD_BLOCK_SIZE) + ", " +
-                            std::to_string(dimGrid.x) + ", " +
-                            std::to_string(dimGrid.y) + ", " +
+                            std::to_string(THREAD_BLOCK_SIZE) + ",gx,gy, " +
+                            // std::to_string(dimGrid.x) + ", " +
+                            // std::to_string(dimGrid.y) + ", " +
                             std::to_string(EXTRA_SIZE_PER_TB) + ", " +
                             "d_input_string, size,n_hat, " +
                             // std::to_string(input_size) + ", " +
@@ -326,7 +332,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
     
     auto key = anydsl_compile(program.c_str(),program.size(),0);
     
-    typedef void (*function) (const int*,const int *, const int, int,int);
+    typedef void (*function) (const int*,const int *, const int, int,int,int,int);
     
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
@@ -337,7 +343,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
         std::cout << "succesfully compiled\n";
     }
 
-    call((int*)d_input_string,d_matched_result, input_size, num_blocks-1,n_hat);
+    call((int*)d_input_string,d_matched_result, input_size, num_blocks-1,n_hat,dimGrid.x,dimGrid.y);
 
     } else if (ALGO == 3){
     std::string dummy;

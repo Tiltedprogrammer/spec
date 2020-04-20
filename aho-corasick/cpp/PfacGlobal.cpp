@@ -95,12 +95,18 @@ int main(int argc, char **argv)
     // // copy the file into the buffer
     input_size = fread (h_inputString, 1, input_size, fpin);
     fclose(fpin);
-    handle->maxPatternLen = 1024;
+
     PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
     if ( PFAC_STATUS_SUCCESS != PFAC_status ){
         printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
         exit(1) ;	
-    }         
+    }
+
+    int match_cout = 0;
+    for (int i = 0; i < input_size; i++) {
+        if(h_matched_result[i] != 0) match_cout++;
+    }
+    std::cout << "Match count: " << match_cout << std::endl;
 
     // free(h_matched_result);
     // h_matched_result = NULL;
