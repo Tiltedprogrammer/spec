@@ -509,7 +509,7 @@ void spec_match_from_device( PFAC_handle_t handle, char *d_input_string, size_t 
 
     } else if(ALGO == 9) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
-        matchNaiveSpecManualOptWrapper(dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
+        matchNaiveSpecManualOptWrapper(handle,dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);
     } else if(ALGO == 10) {
         dim3 dimBlock = (THREAD_BLOCK_SIZE);
         matchNaiveSpecManualOptNUWrapper(handle,dimGrid,dimBlock,(int*)d_input_string,input_size,n_hat,num_blocks-1,d_matched_result);

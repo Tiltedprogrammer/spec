@@ -854,7 +854,7 @@ void build_automaton(int ch,int state,int depth,PFAC_handle_t handle,std::string
         }
     }
     if(!states.empty()){
-        automaton += "  if(pos++ < bdy){\n"
+        automaton += "  if(++pos < bdy){\n"
                      "      inputChar = s_char[pos];\n";
     }
 
