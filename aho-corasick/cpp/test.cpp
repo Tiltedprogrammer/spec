@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     //     vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
     // }
     
-    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,1);
+    spec_match_from_host(handle,h_inputString,input_size,h_matched_result,12);
 
     // h_matched_result[0] = 44;
 
