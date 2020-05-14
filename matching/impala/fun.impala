@@ -571,7 +571,7 @@ fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_
                 
                 let mut matched = 1;
 
-                if t_id < ibuffer_size - t_sizes(i) + 1 {
+                if t_id < ibuffer_size - t_sizes(i) as i64 + 1i64 {
             
                     for j in unroll(0,t_sizes(i)){
             

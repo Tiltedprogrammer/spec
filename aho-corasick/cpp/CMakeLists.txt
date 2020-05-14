@@ -53,7 +53,6 @@ SET(SPEC_KERNELS spec-kernels/ImpalaNaiveCuda.cu spec-kernels/ImpalaNaiveOpt.cu 
 SET(JITIFY /home/alekseey_tyurin_gmail_com/specialization/jitify)
 SET(JITIFY_LINK -lcuda -lcudart -lnvrtc)
 #test
-add_definitions(-DBENCHMARK)
 add_definitions(-JITIFY_THREAD_SAFE=0)
 cuda_add_executable(RunTest test.cpp
                          spec_match.cpp

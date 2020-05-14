@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     long offset = 0;
     int type = 0;
     int verbose = 1;
-    // int block_size = BLOCK_SIZE;
+    // int BLOCK_SIZE = BLOCK_SIZE;
     
     cxxopts::Options options("as", " - example command line options");
 
@@ -68,64 +68,64 @@ int main(int argc, char** argv) {
         r_naive_spec += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         r_naive_spec += "  string_match_pseudoKMP(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
 
         std::string match_pseudoKMP_nochunk;
 
         match_pseudoKMP_nochunk += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_pseudoKMP_nochunk += "  string_match_pseudoKMP_nochunk(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
 
         std::string match_pseudoKMP_nochunk_nope;
 
         match_pseudoKMP_nochunk_nope += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_pseudoKMP_nochunk_nope += "  string_match_pseudoKMP_nochunk_nope(\"" + pattern + "\", "
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
 
         std::string match_pseudoKMP_chunk_nope;
 
         match_pseudoKMP_chunk_nope += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_pseudoKMP_chunk_nope += "  string_match_pseudoKMP_nope(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
     
         std::string match_KMP_chunk;
         match_KMP_chunk += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_KMP_chunk += "  match_kmp(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,0)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,0)}"; //;
 
         std::string match_KMP_nochunk;
         match_KMP_nochunk += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_KMP_nochunk += "  match_kmp(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,1)}"; //;
+              + std::to_string(pattern_size) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,1)}"; //;
 
         std::string match_naive_nochunk;
         match_naive_nochunk += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_naive_nochunk += "  string_match(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ", 32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,1)}"; //;
+              + std::to_string(pattern_size) + ", 32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,1)}"; //;
 
         std::string match_naive_chunk;
         match_naive_chunk += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
         match_naive_chunk += "  string_match(\"" + pattern + "\","
-              + std::to_string(pattern_size) + ", 32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,0)}"; //;
+              + std::to_string(pattern_size) + ", 32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,0)}"; //;
     
 
 
         std::string match_naive_nochunk_nope;
         match_naive_nochunk_nope += "extern fn dummy(pattern : &[u8],p_size : i32,text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-        match_naive_nochunk_nope += "  $string_match_nope($pattern,p_size, 32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,1)}"; //;
+        match_naive_nochunk_nope += "  $string_match_nope($pattern,p_size, 32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,1)}"; //;
 
         std::string match_naive_chunk_nope;
         match_naive_chunk_nope += "extern fn dummy(pattern : &[u8],p_size : i32,text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-        match_naive_chunk_nope += "  $string_match_nope($pattern, p_size, 32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256,0)}"; //;
+        match_naive_chunk_nope += "  $string_match_nope($pattern, p_size, 32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256,0)}"; //;
 
 
 
@@ -133,14 +133,14 @@ int main(int argc, char** argv) {
 
         match_pseudoKMP_chunk_nope_annotated += "extern fn dummy(pattern : &[u8],p_size : i32,text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-        match_pseudoKMP_chunk_nope_annotated += "  string_match_pseudoKMP_nope(pattern,p_size,32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;
+        match_pseudoKMP_chunk_nope_annotated += "  string_match_pseudoKMP_nope(pattern,p_size,32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
 
 
         std::string match_pseudoKMP_nochunk_nope_annotated;
 
         match_pseudoKMP_nochunk_nope_annotated += "extern fn dummy(pattern : &[u8],p_size : i32,text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-        match_pseudoKMP_nochunk_nope_annotated += "  string_match_pseudoKMP_nochunk_nope(pattern,p_size,32i8 ,text, text_size,result_buf," + std::to_string(block_size) + ",256)}"; //;         
+        match_pseudoKMP_nochunk_nope_annotated += "  string_match_pseudoKMP_nochunk_nope(pattern,p_size,32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;         
 
         std::vector<std::pair<int,int>> v;
 

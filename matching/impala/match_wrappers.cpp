@@ -229,9 +229,9 @@ void multipattern_match(std::vector<std::string> vpatterns, std::string file_nam
     std::string dummy_fun;
 
     //maybe asyncronous read from disk and jit;
-    dummy_fun += "extern fn dummy(patterns : &[u8], sizes : &[i32], size : u8, text : &[u8], text_size : i64, result_buf : &mut[u8],block_size : i32) -> (){\n";
+    dummy_fun += "extern fn dummy(patterns : &[u8], sizes : &[i32], size : u8, text : &[u8], text_size : i64, result_buf : &mut[u8],BLOCK_SIZE : i32) -> (){\n";
 
-    dummy_fun += "  string_match_multiple_nope(patterns, sizes,size,text,text_size,result_buf,block_size);}"; //;
+    dummy_fun += "  string_match_multiple_nope(patterns, sizes,size,text,text_size,result_buf,BLOCK_SIZE);}"; //;
     
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
@@ -259,7 +259,7 @@ void multipattern_match(std::vector<std::string> vpatterns, std::string file_nam
 
     std::cout << "running ..." << "\n";
     time.start();
-    call(dpatterns,dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf,block_size);
+    call(dpatterns,dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf,BLOCK_SIZE);
     cudaDeviceSynchronize();
     time.stop();
 
@@ -286,10 +286,14 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
     std::string sizes;
 
     int len = 0;
+    int max_len = vpatterns[0].size();
     sizes = std::to_string(vpatterns[0].size());
     for(int i = 1; i < vpatterns.size(); i++) {
         sizes += "," + std::to_string(vpatterns[i].size());
-        len +=  vpatterns[i].size();   
+        len +=  vpatterns[i].size();
+        if (max_len < vpatterns[i].size()){
+            max_len = vpatterns[i].size();
+        }   
     }
     
     char* dtextptr;
@@ -303,14 +307,20 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
     std::string dummy_fun;
 
     std::string patterns;
-    for (auto &vp : vpatterns) patterns += vp;
+    for (auto &vp : vpatterns){
+            for(auto ch : vp){
+                patterns += std::to_string((int)ch);
+                patterns += "u8,";
+            }
+    }
+    patterns.pop_back(); //remove last ',';
 
-    int block_num = (text_size + block_size - 1) / block_size;
+    int block_num = (text_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
     //maybe asyncronous read from disk and jit;
     dummy_fun += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
 
-    dummy_fun += "  string_match_multiple(\"" + patterns + "\","
-              + "["+ sizes + "]" + "," + std::to_string(vpatterns.size()) + "u8,text, text_size,result_buf,"+std::to_string(block_size) + "," + std::to_string(block_num) + ")}"; //;
+    dummy_fun += "  string_match_multiple([" + patterns + "],"
+              + "["+ sizes + "]" + "," + std::to_string(vpatterns.size()) + "u8," + std::to_string(max_len) + ",text, text_size,result_buf,"+std::to_string(BLOCK_SIZE) + "," + std::to_string(block_num) + ")}"; //;
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
 

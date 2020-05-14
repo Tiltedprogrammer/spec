@@ -67,29 +67,6 @@
 
 
 
-#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
-
-inline void __cudaCheckError( const char *file, const int line )
-{
-    cudaError err = cudaGetLastError();
-    if ( cudaSuccess != err )
-    {
-        fprintf( stderr, "cudaCheckError() failed at %s:%i : %s\n",
-                 file, line, cudaGetErrorString( err ) );
-        exit( -1 );
-    }
-
-    // More careful checking. However, this will affect performance.
-    // Comment away if needed.
-    err = cudaDeviceSynchronize();
-    if( cudaSuccess != err )
-    {
-        fprintf( stderr, "cudaCheckError() with sync failed at %s:%i : %s\n",
-                 file, line, cudaGetErrorString( err ) );
-        exit( -1 );
-    }
-    return;
-}
 
 std::vector<std::string> split (const std::string &s, char delim) {
     std::vector<std::string> result;
@@ -203,15 +180,15 @@ int main(int argc, char **argv)
 
     std::vector<std::pair<int,int>> resImpala;
 
-    multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    //multipattern_match_const_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    // multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    // multipattern_match_const_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_sizes_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    // multipattern_match_const_wrapper2(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    multipattern_match_const_unroll_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     
 
-     
-
-    // std::cout << resImpala.size() << " " << resPfac.size() << std::endl;
+    std::cout << resImpala.size() << " " << resPfac.size() << std::endl;
 
 
 

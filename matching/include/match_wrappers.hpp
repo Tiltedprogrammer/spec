@@ -1,10 +1,18 @@
 #ifndef MATCH_WRAPPERS_HPP
 #define MATCH_WRAPPERS_HPP
 
+#include <iostream>
+#include <vector>
+#include <math.h>
+#include <string>
+
+
 #include <vector>
 #include <string>
 
-#define block_size BLOCK_SIZE
+#ifndef BLOCKSIZE
+#define BLOCKSIZE 512
+#endif
 
 
 void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::string subject_string_filename, long size, long offset, int verbose, std::vector<std::pair<int,int>> &res, int res_to_vec);

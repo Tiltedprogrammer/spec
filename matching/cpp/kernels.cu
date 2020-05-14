@@ -300,13 +300,185 @@ void multipattern_match_const_wrapper(std::vector<std::string> vpatterns, std::s
     } else {
         grid.x = num_blocks;
     }
-    match_multy_const<<<grid,block>>>(vpatterns.size(),max,dtextptr,text_size,dresult_buf);
+    RUN((match_multy_const<<<grid,block>>>(vpatterns.size(),max,dtextptr,text_size,dresult_buf)))
     cudaDeviceSynchronize();
     time.stop();
 
     
     delete[](sizes);
     
+    
+    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+
+        delete[] (h_match_result);
+    }
+    
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    // cudaFree(dpatterns);
+    // cudaFree(dsizes);
+    // cudaEventDestroy(start);
+    // cudaEventDestroy(stop);
+}
+
+
+void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns, std::string file_name,size_t size, size_t offset,int verbose,std::vector<std::pair<int,int>> &res ,int res_to_vec){
+
+    int* sizes = new int[vpatterns.size()];
+
+    int len = 0;
+    int max = vpatterns[0].size();
+    for(int i = 0; i < vpatterns.size(); i++) {
+        sizes[i] = vpatterns[i].size();
+        max = sizes[i] > max ? sizes[i] : max;
+        len += sizes[i];     
+    }
+    
+    int loffset = 0;
+
+    char* dtextptr;
+    size_t text_size;
+
+    if((dtextptr = read_file(file_name,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    
+    //nochunk only
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+    am::timer time;
+    std::cout << "running ..." << "\n";
+    time.start();
+
+    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+    // gsqrt = (int)sqrt(grid_size) + 1;
+    // dim3 grid(gsqrt,gsqrt);
+    int num_blocks = (text_size + block.x - 1) / block.x;
+    int p = num_blocks / 32768;
+    dim3 grid;
+    if(p > 0) {
+        grid.x = 32768;
+        grid.y = p + 1;
+    } else {
+        grid.x = num_blocks;
+    }
+    std::string kernel;
+    
+    kernel += "multiple_match_const_unroll\n";
+    kernel += "__device__ long threadId(){\n"
+              "long blockId = (long)blockIdx.y * (long)gridDim.x + (long)blockIdx.x;\n"
+              "long threadId = blockId * (long)blockDim.x + (long)threadIdx.x;\n"
+              "return threadId;\n}\n";
+
+    kernel += "__constant__ char mpatterns[128*64];\n";
+    kernel += "__global__\n";
+    kernel += "void multiple_match_const_unroll(char* text, long text_size, char* result_buf) {\n";
+    kernel += "    long t_id = threadId();\n"
+
+              "    if(t_id < text_size){\n"
+              "       int p_offset = 0;\n"
+              "       int matched = 1;\n"
+              "       int match_result = 0;\n"
+        // result_buf[t_id] = 0;
+
+              "       if(t_id < text_size -" + std::to_string(max) + " + 1){\n";
+
+    std::string cycle;
+    std::string cycle_elem;
+    int i = 0;
+    
+    for(auto &vp : vpatterns){
+        cycle += "      matched = 1;\n"
+                 "      #pragma unroll\n"
+                 "      for(int j = 0; j < " + std::to_string(vp.size()) +"; j++) {\n"
+                 "          if(text[t_id + j] != mpatterns[j + p_offset]) {\n"
+                 "             matched = -1;\n"
+                 "             break;\n"
+                 "          }\n"
+                 "      }\n"
+                 "      if(matched == 1) {\n"
+                 "          match_result = " + std::to_string(i) + "+1;\n"
+                 "      }\n"
+                 "      p_offset += " + std::to_string(vp.size()) + ";\n";
+        i++;                
+    }
+    cycle +="   }else{\n";
+
+    i = 0;
+    for(auto &vp : vpatterns){
+        cycle += "      matched = 1;\n"
+                 "      if(t_id < text_size - " + std::to_string(vp.size()) + " + 1){\n"
+                 "      #pragma unroll\n"
+                 "      for(int j = 0; j < " + std::to_string(vp.size()) +"; j++) {\n"
+                 "          if(text[t_id + j] != mpatterns[j + p_offset]) {\n"
+                 "              matched = -1;\n"
+                 "              break;\n"
+                 "          }\n"
+                 "      }\n"
+                 "      if(matched == 1) {\n"
+                 "         match_result = " + std::to_string(i) + "+1;\n"
+                 "      }\n}\n"
+                 "      p_offset += " + std::to_string(vp.size()) + ";\n";
+        i++;                
+    }
+    cycle +="   }\n";
+
+    kernel += cycle;
+    kernel += "result_buf[t_id] = match_result;\n}\n}";
+
+
+    static jitify::JitCache kernel_cache;
+    jitify::Program program = kernel_cache.program(kernel);
+    using jitify::reflection::type_of;
+
+    auto kernel_instance = program.kernel("multiple_match_const_unroll").instantiate();
+
+    char * cvpatterns = new char[len];
+    
+    for(auto &vp : vpatterns){
+        for(int j = loffset, i = 0; j < loffset + vp.size(); j++, i++){
+            cvpatterns[j] = vp[i];
+        }
+        loffset += vp.size();
+        
+    }
+
+    // for(int i = 0; i < vpatterns.size(); i++){
+    cuMemcpyHtoD(kernel_instance.get_constant_ptr("mpatterns"), cvpatterns, len);
+        // loffset += sizes[i];
+    // }
+    CudaCheckError();
+
+    delete[](cvpatterns);
+
+
+    RUN(kernel_instance.configure(grid, block)
+       .launch(dtextptr,text_size,dresult_buf))
+    cudaDeviceSynchronize();
+    time.stop();
+
+    
+    delete[](sizes);
     
     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     

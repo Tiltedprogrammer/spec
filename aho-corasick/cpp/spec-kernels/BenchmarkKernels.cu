@@ -61,11 +61,24 @@ __global__ void mini_kernel(int* src, int* dst, int* clocks){
 
 }
 
+__global__ void mini_kernel_2(int* src, int* dst, int* clocks){
+
+    int t_id = blockIdx.x * gridDim.x + threadIdx.x;
+
+    int val1,val2,val3;
+    val1 = 42; //
+    val2 = src[t_id]; // L1 miss
+    val3 = src[t_id + 1]; //L1
+
+    dst[t_id] = val3;
+}
+
 void set_const_mem(int * host_mem, int size){
     cudaMemcpyToSymbol(mini_array, host_mem, size * sizeof(int));
 }
 
 void mini_kernel_wrap(dim3 grid,dim3 block,int* src, int* dst,int* clocks){
     dummy_kernel<<<1,1>>>();
+    mini_kernel_2<<<grid,block>>>(src, dst, clocks);
     mini_kernel<<<grid,block>>>(src, dst, clocks);
 }
