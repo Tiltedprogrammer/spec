@@ -34,11 +34,17 @@ SET(JITIFY_LINK -lcuda -lcudart -lnvrtc)
 add_definitions(-JITIFY_THREAD_SAFE=0)
 
 
-cuda_add_executable(match_spec.out main_spec.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ${NON_JIT_MATCH})
-# add_executable(clean.out test.cu)
-target_include_directories(match_spec.out PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include)
-target_link_libraries(match_spec.out ${AnyDSL_runtime_LIBRARIES})
+# cuda_add_executable(match_spec.out main_spec.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ${NON_JIT_MATCH})
+# # add_executable(clean.out test.cu)
+# target_include_directories(match_spec.out PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include)
+# target_link_libraries(match_spec.out ${AnyDSL_runtime_LIBRARIES})
 
 cuda_add_executable(TestSpec test.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ../cpp/kernels.cu)
 target_include_directories(TestSpec PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include ${PFAC_INCLUDE_DIR} ${JITIFY})
 target_link_libraries(TestSpec ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_compile_options(TestSpec  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v>)
+
+cuda_add_executable(TestSpec2 test_simple.cpp match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ../cpp/kernels.cu)
+target_include_directories(TestSpec2 PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include ${PFAC_INCLUDE_DIR} ${JITIFY})
+target_link_libraries(TestSpec2 ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+target_compile_options(TestSpec2  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xptxas -v>)

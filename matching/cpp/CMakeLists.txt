@@ -52,4 +52,9 @@ cuda_add_executable(MatchConstManual MatchConstManual.cpp ../impala/match_wrappe
 target_include_directories(MatchConstManual PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../impala ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include ${PFAC_INCLUDE_DIR} ${JITIFY})
 target_link_libraries(MatchConstManual ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
 
-# target_compile_options(match.out PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O4 -arch=sm_75>)
+
+cuda_add_executable(MatchSingleBench MatchSingleBench.cpp ../impala/match_wrappers.cpp ../cpp/utils.cpp ${FUN_INCLUDE_FILE} ../cpp/kernels.cu)
+target_include_directories(MatchSingleBench PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../impala ${AnyDSL_runtime_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ../include ${PFAC_INCLUDE_DIR} ${JITIFY})
+target_link_libraries(MatchSingleBench ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
+
+target_compile_options(MatchSingleBench PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O3 -arch=sm_75>)

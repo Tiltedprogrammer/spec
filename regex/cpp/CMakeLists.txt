@@ -27,9 +27,11 @@ else()
 endif()
 
 
-add_executable(test test.cpp)
+cuda_add_executable(test test.cpp)
 
 target_include_directories(test PUBLIC $ENV{RMM_ROOT}/include ${CUDA_INCLUDE_DIRS} /home/alekseey_tyurin_gmail_com/specialization/custrings/cpp/include)
+target_link_libraries(test ${NVSTRINGS_LIB} ${RMM_LIB} )
+
 
 # target_include_directories(simple.out )
 # set(PFAC_LIB_ROOT "/home/bolkonskiy322_gmail_com/PFAC/PFAC/include")

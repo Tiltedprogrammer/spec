@@ -35,6 +35,7 @@ inline void __cudaCheckError( const char *file, const int line )
     return;
 }
 
+
 int main(int argc, char **argv)
 {
 
@@ -78,7 +79,8 @@ int main(int argc, char **argv)
     std::cout << "Clocks for const cache load/store" << h_clocks[4] << "\n";
     std::cout << "Clocks for shared load/store" << h_clocks[5] << "\n";
     
-    assert(h_dst[0] == 34);
+    std::cout << h_dst[0] << std::endl;
+    assert(h_dst[0] == 33);
     assert(h_dst[1] == 14);
     
     cudaFree(d_dst);

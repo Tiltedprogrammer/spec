@@ -87,31 +87,6 @@ PFAC_status_t  PFAC_kernel_timeDriven_warpper( PFAC_handle_t handle, char *d_inp
     std::cout << "Kernel runtime " << avg << " Std dev: " << dev << std::endl;\
 
 
-// #define ITERATIONS 20
-// // #ifdef BENCHMARK
-// #define RUN(kernel) \
-//     cudaEvent_t start, stop;\
-//     cudaEventCreate(&start);\
-//     cudaEventCreate(&stop);\
-//     kernel;\
-//     cudaEventRecord(start);\
-//     for(int i = 0; i < ITERATIONS; i++){\
-//         kernel;\
-//     }\
-//     cudaEventRecord(stop);\
-//     cudaEventSynchronize(stop);\
-//     float milliseconds = 0;\
-//     cudaEventElapsedTime(&milliseconds, start, stop);\
-//     std::cout << "Kernel runtime " << milliseconds / ITERATIONS << std::endl;
-
-// #else
-
-// #define RUN(kernel) (kernel);
-
-// #endif
-
-
-
 #define THREAD_BLOCK_EXP   (8)
 #define EXTRA_SIZE_PER_TB  (128)
 #define THREAD_BLOCK_SIZE  (1 << THREAD_BLOCK_EXP)

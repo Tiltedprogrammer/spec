@@ -22,10 +22,6 @@
 #include "match_wrappers.hpp"
 #include "kernels.hpp"
 
-// #include "spec_match.hpp"
-
-
-
 
 std::vector<std::string> split (const std::string &s, char delim) {
     std::vector<std::string> result;
@@ -107,30 +103,18 @@ int main(int argc, char **argv)
      
     memset(h_matched_result,0,input_size * sizeof(int));
 
-
-    std::vector<std::string> vpatterns;
-
-    for (int i = 0; i < handle->numOfPatterns; i++) {
-        vpatterns.push_back(std::string(handle->rowPtr[i],handle->patternLen_table[i+1]));
-    }
-
+    assert(handle->numOfPatterns == 1);
     
-    PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
-    if ( PFAC_STATUS_SUCCESS != PFAC_status ){
-        printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
-        exit(1) ;	
-    }         
-    // spec_match_from_host(handle,h_inputString,input_size,h_matched_result,6);
+    std::string pattern = std::string(handle->rowPtr[0],handle->patternLen_table[1]);
 
-    std::cout << "PFAC" << std::endl;
+    std::vector<std::pair<int,int>> resCuda;
 
-
-    std::vector<std::pair<int,int>> resPfac;
-    
+    // match_naive_constant_wrapper(pattern,inputFile,0,input_size,0,resCuda,1);
+    match_kmp(pattern,inputFile,1,input_size,0,0,resCuda,1);
     for (int i = 0; i < input_size; i++) {
         if (h_matched_result[i] != 0) {
             // printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-            resPfac.push_back(std::pair(i,h_matched_result[i]));
+            resCuda.push_back(std::pair(i,h_matched_result[i]));
         }
     }
 
@@ -139,28 +123,27 @@ int main(int argc, char **argv)
 
     std::vector<std::pair<int,int>> resImpala;
 
+    // match_naive_single(pattern, inputFile, 0,input_size,0,0,resImpala,1);
+
+    match_pe(pattern,inputFile,input_size,0,0,resImpala,1);
+    // match_naive_single(inputFile,pattern,1,input_size,0,0,resImpala,1);
+    // match_naive_constant_wrapper(pattern,inputFile,1,input_size,0,resImpala,1);
+    // match_kmp(pattern,inputFile,1,input_size,0,0,resImpala,1);
+
     // multipattern_match_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_sizes_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
+    // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_wrapper2(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_unroll_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     
 
-    std::cout << resImpala.size() << " " << resPfac.size() << std::endl;
+    std::cout << resImpala.size() << " " << resCuda.size() << std::endl;
 
 
+    assert(resCuda == resImpala);
 
-    for (int i = 0; i < resImpala.size(); i++) {
-        if (resImpala[i] != resPfac[i]) {
-            std::cout << resPfac[i].second << std::endl;
-            break;
-        }
-
-    }
-    assert(resPfac == resImpala);
-
-    PFAC_status = PFAC_destroy( handle ) ;
+    PFAC_status = PFAC_destroy( handle );
     assert( PFAC_STATUS_SUCCESS == PFAC_status );
     
 

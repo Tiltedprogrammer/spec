@@ -943,10 +943,11 @@ void matchCorasickSpecWrapper(PFAC_handle_t handle,dim3 grid, dim3 block,const i
     jitify::Program program = kernel_cache.program(kernel);
     using jitify::reflection::type_of;
 
-    RUN((program.kernel("match_naive_opt_spec_manual_corasick_jit")
+    auto kernel_instance = program.kernel("match_naive_opt_spec_manual_corasick_jit")
        .instantiate()
-       .configure(grid, block)
-       .launch(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
+       .configure(grid, block);
+
+    RUN(kernel_instance.launch(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result))
 
     // RUN((match_corasick_spec<<<grid,block>>>(d_input_string,input_size,n_hat,num_blocks_minus1,d_match_result)))
 }

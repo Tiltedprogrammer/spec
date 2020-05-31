@@ -4,6 +4,9 @@
 #define KERNEL_RADIUS63 31
 #define KERNEL_LENGTH63 (2 * KERNEL_RADIUS63 + 1)
 
+#define COL_HALO_STEP63 1
+#define ROW_HALO_STEP63 1
+
 void rowConvolve63(float*,float*,int,int,int);
 
 void colConvolve63(float*,float*,int,int,int);

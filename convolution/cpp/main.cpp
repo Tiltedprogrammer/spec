@@ -131,80 +131,70 @@ int main(int argc, char ** argv){
 
     if(KERNEL_RADIUS == 15 && flag){
         setConvolutionKernel31(h_Kernel,KERNEL_LENGTH);
-
-        for (int j = 0; j < iterations; j++) {
     
-            rowConvolve31(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float));
+        {RUN(rowConvolve31(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float)))}
 
-            colConvolve31(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float));
+        {RUN(colConvolve31(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float)))}
     
-        }
         cudaDeviceSynchronize();
     
     }else if(KERNEL_RADIUS == 31 && flag){
         setConvolutionKernel63(h_Kernel,KERNEL_LENGTH);
-        for (int j = 0; j < iterations; j++) {
     
-            rowConvolve63(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float));
+        {RUN(rowConvolve63(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float)))}
 
-            colConvolve63(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float));
+        {RUN(colConvolve63(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float)))}
     
-        }
         cudaDeviceSynchronize();
     }else if(KERNEL_RADIUS == 7 && flag){
         setConvolutionKernel15(h_Kernel,KERNEL_LENGTH);
-        for (int j = 0; j < iterations; j++) {
     
-            rowConvolve15(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float));
+        {RUN(rowConvolve15(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float)))}
 
-            colConvolve15(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float));
+        {RUN(colConvolve15(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float)))}
     
-        }
         cudaDeviceSynchronize();
     }else if(KERNEL_RADIUS == 63 && flag){
         setConvolutionKernel127(h_Kernel,KERNEL_LENGTH);
-        for (int j = 0; j < iterations; j++) {
     
-            rowConvolve127(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float));
+        {RUN(rowConvolve127(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float)))}
 
-            colConvolve127(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float));
+        {RUN(colConvolve127(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float)))}
     
-        }
         cudaDeviceSynchronize();
     }else if(KERNEL_RADIUS == 127 && flag){
         setConvolutionKernel255(h_Kernel,KERNEL_LENGTH);
-        for (int j = 0; j < iterations; j++) {
     
-            rowConvolve255(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float));
+        {RUN(rowConvolve255(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float)))}
 
-            colConvolve255(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float));
+        {RUN(colConvolve255(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float)))}
     
-        }
         cudaDeviceSynchronize();
     }else {
-        int blockX;
-        int blockY;
+        int blockX = 32;
+        int blockY = 16;
+        int halo = 1;
         if(KERNEL_RADIUS <= 31){
             blockX = 32;
             blockY = 16;
         }else if(KERNEL_RADIUS <= 63){
-            blockX = 64;
-            blockY = 8;
+            // blockX = 64;
+            // blockY = 8;
+            halo = 2;
         }else if(KERNEL_RADIUS <= 127){
-            blockX = 128;
-            blockY = 4;
+            // blockX = 128;
+            // blockY = 4;
+            halo = 4;
         }else {
             std::cout << "Too huge length, maximum supported is 255" << "\n";
             return 0;
         }
         setConvolutionKernel(h_Kernel,KERNEL_LENGTH);
-        for (int j = 0; j < iterations; j++) {
-    
-            rowConvolve(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float),KERNEL_RADIUS,blockX,blockY,8,1);
 
-            colConvolve(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float),KERNEL_RADIUS,blockY,blockX,8,1);
+        {RUN(rowConvolve(d_Buffer,d_Input,imageW,imageH, pitch / sizeof(float),KERNEL_RADIUS,blockX,blockY,8,halo))}
+
+        {RUN(colConvolve(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float),KERNEL_RADIUS,blockY,blockX,8,halo))}
     
-        }
         cudaDeviceSynchronize();
     }
 

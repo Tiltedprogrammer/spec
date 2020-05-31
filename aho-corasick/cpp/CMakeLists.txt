@@ -210,16 +210,6 @@ target_include_directories(CudaCorasickSpec PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_I
 target_compile_options(CudaCorasickSpec PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-pthread>)
 
 
-cuda_add_executable(MicroBench 
-                    mini-benchmark.cpp
-                    spec-kernels/BenchmarkKernels.cu
-                    )
-
-# target_link_libraries(MicroBench  ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES} ${JITIFY_LINK})
-target_include_directories(MicroBench  PUBLIC spec-kernels ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR} ../../matching/include ${CMAKE_CURRENT_BINARY_DIR}/../../matching/impala ${JITIFY})
-target_compile_options(MicroBench  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-pthread>)
-
-
 # # target_link_libraries(simple.out ${PFAC_LIB} ${AnyDSL_runtime_LIBRARIES})
 # # target_include_directories(simple.out PUBLIC ${CUDA_INCLUDE_DIRS} ${PFAC_INCLUDE_DIR} ${AnyDSL_runtime_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 

@@ -4,6 +4,9 @@
 #define KERNEL_RADIUS255 127
 #define KERNEL_LENGTH255 (2 * KERNEL_RADIUS255 + 1)
 
+#define COL_HALO_STEP255 4
+#define ROW_HALO_STEP255 4
+
 void rowConvolve255(float*,float*,int,int,int);
 
 void colConvolve255(float*,float*,int,int,int);

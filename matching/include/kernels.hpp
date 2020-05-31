@@ -5,6 +5,7 @@
 #include <vector>
 #include <math.h>
 #include <string>
+#include <stdlib.h>
 
 #include "jitify.hpp"
 
@@ -32,7 +33,7 @@ inline void __cudaCheckError( const char *file, const int line )
     return;
 }
 
-#define ITERATIONS 20
+#define ITERATIONS ITERATIONS_CMAKE
 
 #ifndef RUN
 #ifdef BENCHMARK
@@ -42,7 +43,10 @@ inline void __cudaCheckError( const char *file, const int line )
     cudaEventCreate(&stop);\
     kernel;\
     std::vector<float> times;\
-    for(int i = 0; i < ITERATIONS; i++){\
+    int iterations = ITERATIONS;\
+    const char* s = getenv("ITERATIONS");\
+    if(s) iterations = atoi(s);\
+    for(int i = 0; i < iterations; i++){\
         cudaEventRecord(start);\
         kernel;\
         cudaEventRecord(stop);\
@@ -53,10 +57,12 @@ inline void __cudaCheckError( const char *file, const int line )
     }\
     float avg = 0.0;\
     for(auto &n: times) avg += n;\
-    avg /= ITERATIONS;\
+    avg /= iterations;\
     float dev = 0.0;\
     for(auto &n: times) dev += ((n - avg) * (n - avg));\
-    dev = sqrt(dev / (ITERATIONS - 1));\
+    if(iterations > 1){\
+        dev = sqrt(dev / (iterations - 1));\
+    }\
     std::cout << "Kernel runtime " << avg << " Std dev: " << dev << std::endl;\
 
 #else
@@ -75,7 +81,7 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
 
 void multipattern_match_shared_wrapper(std::vector<std::string> vpatterns, std::string file_name,long size, long offset,int verbose,std::vector<std::pair<int,int>> &res ,int res_to_vec);
 
-void match_naive_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,int verbose);
+void match_naive_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,std::vector<std::pair<int,int>> &res, int res_to_vec);
 
 void multipattern_match_texture_wrapper(std::vector<std::string> vpatterns, std::string subject_string_filename, long size, long offset,int verbose); //nochunk == 0 => nochunk
 
@@ -83,5 +89,9 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
 
 
 void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns, std::string file_name,size_t size, size_t offset,int verbose,std::vector<std::pair<int,int>> &res ,int res_to_vec);
+
+void match_naive_constant_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,std::vector<std::pair<int,int>> &res, int res_to_vec); //nochunk == 0 => nochunk
+
+void match_kmp(std::string pattern, std::string subject_string_filename, int constant, long size, long offset, int verbose, std::vector<std::pair<int,int>> &res, int res_to_vec);
 
 #endif

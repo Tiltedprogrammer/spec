@@ -1,8 +1,8 @@
 #include "convolutionSeparable127.hpp"
 #include "defines.hpp"
 
-#define ROW_BLOCK_DIM_X127 64
-#define ROW_BLOCK_DIM_Y127 8
+#define ROW_BLOCK_DIM_X127 32
+#define ROW_BLOCK_DIM_Y127 16
 
 __constant__ float c_Kernel127[256];
 
@@ -18,10 +18,10 @@ __global__ void rowConvolutionFilter127(
     int imageH,
     int pitch
 ){
-    __shared__ float sData[ROW_BLOCK_DIM_Y127][(ROW_RESULT_STEP + 2*ROW_HALO_STEP) * ROW_BLOCK_DIM_X127];
+    __shared__ float sData[ROW_BLOCK_DIM_Y127][(ROW_RESULT_STEP + 2*ROW_HALO_STEP127) * ROW_BLOCK_DIM_X127];
 
     //offset to left halo edge
-    const int baseX = (blockIdx.x * ROW_RESULT_STEP) * ROW_BLOCK_DIM_X127 - ROW_HALO_STEP * ROW_BLOCK_DIM_X127 + threadIdx.x;
+    const int baseX = (blockIdx.x * ROW_RESULT_STEP) * ROW_BLOCK_DIM_X127 - ROW_HALO_STEP127 * ROW_BLOCK_DIM_X127 + threadIdx.x;
     const int baseY = blockIdx.y * ROW_BLOCK_DIM_Y127 + threadIdx.y;
 
     d_Src += baseY * pitch + baseX;
@@ -31,7 +31,7 @@ __global__ void rowConvolutionFilter127(
     
 #pragma unroll
 
-    for (int i = ROW_HALO_STEP; i < ROW_HALO_STEP + ROW_RESULT_STEP; i++) {
+    for (int i = ROW_HALO_STEP127; i < ROW_HALO_STEP127 + ROW_RESULT_STEP; i++) {
      
         sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X127] = (baseX + i * ROW_BLOCK_DIM_X127) < imageW ? d_Src[i*ROW_BLOCK_DIM_X127] : 0;
     
@@ -40,7 +40,7 @@ __global__ void rowConvolutionFilter127(
     //load left halo
 #pragma unroll
     
-    for (int i = 0; i < ROW_HALO_STEP; i++) {
+    for (int i = 0; i < ROW_HALO_STEP127; i++) {
 
         sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X127] = (baseX + i * ROW_BLOCK_DIM_X127) >= 0 ? d_Src[i*ROW_BLOCK_DIM_X127] : 0;
     }
@@ -48,7 +48,7 @@ __global__ void rowConvolutionFilter127(
     //load right halo
 #pragma unroll
 
-    for (int i = ROW_HALO_STEP + ROW_RESULT_STEP; i < ROW_HALO_STEP + ROW_RESULT_STEP + ROW_HALO_STEP; i++) {
+    for (int i = ROW_HALO_STEP127 + ROW_RESULT_STEP; i < ROW_HALO_STEP127 + ROW_RESULT_STEP + ROW_HALO_STEP127; i++) {
         
         sData[threadIdx.y][threadIdx.x + i * ROW_BLOCK_DIM_X127] = (baseX + i * ROW_BLOCK_DIM_X127) < imageW ? d_Src[i * ROW_BLOCK_DIM_X127] : 0;
     
@@ -63,7 +63,7 @@ __global__ void rowConvolutionFilter127(
     //convolve
 #pragma unroll
 
-    for (int i = ROW_HALO_STEP; i < ROW_HALO_STEP+ROW_RESULT_STEP; i++){
+    for (int i = ROW_HALO_STEP127; i < ROW_HALO_STEP127+ROW_RESULT_STEP; i++){
 
         if(baseX + i * ROW_BLOCK_DIM_X127 < imageW){
 
@@ -83,8 +83,8 @@ __global__ void rowConvolutionFilter127(
     }
 }
 
-#define COL_BLOCK_DIM_X127 8
-#define COL_BLOCK_DIM_Y127 64
+#define COL_BLOCK_DIM_X127 16
+#define COL_BLOCK_DIM_Y127 32
 
 __global__ void colConvolutionFilter127(
     float *d_Dst,
@@ -95,10 +95,10 @@ __global__ void colConvolutionFilter127(
 )
 {
 
-    __shared__ float sData[COL_BLOCK_DIM_X127][(COL_RESULT_STEP + 2 * COL_HALO_STEP) * COL_BLOCK_DIM_Y127 + 1]; //+1 to avoid shared mem bank conflicts
+    __shared__ float sData[COL_BLOCK_DIM_X127][(COL_RESULT_STEP + 2 * COL_HALO_STEP127) * COL_BLOCK_DIM_Y127 + 1]; //+1 to avoid shared mem bank conflicts
     
     const int baseX = blockIdx.x * COL_BLOCK_DIM_X127 + threadIdx.x;
-    const int baseY = blockIdx.y * COL_BLOCK_DIM_Y127 * COL_RESULT_STEP - COL_HALO_STEP * COL_BLOCK_DIM_Y127 + threadIdx.y;
+    const int baseY = blockIdx.y * COL_BLOCK_DIM_Y127 * COL_RESULT_STEP - COL_HALO_STEP127 * COL_BLOCK_DIM_Y127 + threadIdx.y;
 
     d_Src += baseY * pitch + baseX;
     d_Dst += baseY * pitch + baseX;
@@ -106,7 +106,7 @@ __global__ void colConvolutionFilter127(
     //load main data
 #pragma unroll
 
-    for (int i = COL_HALO_STEP; i < COL_HALO_STEP + COL_RESULT_STEP; i++) {
+    for (int i = COL_HALO_STEP127; i < COL_HALO_STEP127 + COL_RESULT_STEP; i++) {
         
         sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y127] = (baseY + i * COL_BLOCK_DIM_Y127) < imageH ? d_Src[i * COL_BLOCK_DIM_Y127 * pitch] : 0;
     
@@ -115,7 +115,7 @@ __global__ void colConvolutionFilter127(
     //load top halo
 #pragma unroll
     
-    for (int i = 0; i < COL_HALO_STEP; i ++) {
+    for (int i = 0; i < COL_HALO_STEP127; i ++) {
 
         sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y127] = (baseY + i * COL_BLOCK_DIM_Y127) >= 0 ? d_Src[i * COL_BLOCK_DIM_Y127 * pitch] : 0;
 
@@ -123,7 +123,7 @@ __global__ void colConvolutionFilter127(
     //load bottom halo
 #pragma unroll
     
-    for (int i = COL_HALO_STEP + COL_RESULT_STEP; i < COL_HALO_STEP + COL_RESULT_STEP + COL_HALO_STEP; i++) {
+    for (int i = COL_HALO_STEP127 + COL_RESULT_STEP; i < COL_HALO_STEP127 + COL_RESULT_STEP + COL_HALO_STEP127; i++) {
         
         sData[threadIdx.x][threadIdx.y + i * COL_BLOCK_DIM_Y127] = (baseY + i * COL_BLOCK_DIM_Y127) < imageH ? d_Src[i * COL_BLOCK_DIM_Y127 * pitch] : 0;
     
@@ -138,7 +138,7 @@ __global__ void colConvolutionFilter127(
     //convolve
 #pragma unroll
     
-    for (int i = COL_HALO_STEP; i < COL_HALO_STEP + COL_RESULT_STEP; i++) {
+    for (int i = COL_HALO_STEP127; i < COL_HALO_STEP127 + COL_RESULT_STEP; i++) {
 
         if ((baseY + i * COL_BLOCK_DIM_Y127) < imageH) {
 

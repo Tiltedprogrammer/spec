@@ -1,10 +1,10 @@
-
 #include "kernels.hpp"
 #include "utils.hpp"
 //CPU timer
 #include "../include/timer.h"
 
 #include <iostream>
+#include <fstream>
 
 
 typedef struct Template{
@@ -31,7 +31,6 @@ __global__ void match(char* pattern, int pattern_size, char* text, long text_siz
 
     if(t_id < text_size){
         int matched = 1;
-        result_buf[t_id] = 0;
 
         if(t_id < text_size - pattern_size + 1){
             
@@ -80,7 +79,7 @@ __global__ void match_shared(char* pattern, int pattern_size, char* text, long t
     }
 }
 
-__global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int p_number,int max_len, const char* __restrict__ text, long text_size, char* result_buf) {
+__global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int p_number,int max_len, const char* __restrict__ text, long text_size, int* result_buf) {
 
     long t_id = threadId();
 
@@ -100,7 +99,7 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
                     int size = p_sizes[i];
                     for(int j = 0; j < size; j++) {
                     
-                        if(text[t_id + j] != patterns[j+p_offset]) {
+                        if((int)text[t_id + j] != (int)patterns[j+p_offset]) {
                             matched = -1;
                             break;
                         }
@@ -137,10 +136,10 @@ __global__ void match_multy(const char* __restrict__ patterns, int* p_sizes, int
 }
 
 //maximum 64 patterns with 8192 total length
-__constant__ char mpatterns[128*64];
-__constant__ int cp_sizes[64];
+__constant__ char mpatterns[1024]; //40 * 1024
+__constant__ int cp_sizes[2248];
 
-__global__ void match_multy_const(int p_number, int max_len, char* text, long text_size, char* result_buf) {
+__global__ void match_multy_const(int p_number, int max_len, char* text, long text_size, int* result_buf) {
 
     long t_id = threadId();
 
@@ -276,21 +275,13 @@ void multipattern_match_const_wrapper(std::vector<std::string> vpatterns, std::s
         loffset += sizes[i];
     }
     
-    char* dresult_buf;
+    int* dresult_buf;
     
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     
     //nochunk only
     dim3 block(block_size);
-    long grid_size;
-    long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
 
-    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-    // gsqrt = (int)sqrt(grid_size) + 1;
-    // dim3 grid(gsqrt,gsqrt);
     int num_blocks = (text_size + block.x - 1) / block.x;
     int p = num_blocks / 32768;
     dim3 grid;
@@ -302,37 +293,23 @@ void multipattern_match_const_wrapper(std::vector<std::string> vpatterns, std::s
     }
     RUN((match_multy_const<<<grid,block>>>(vpatterns.size(),max,dtextptr,text_size,dresult_buf)))
     cudaDeviceSynchronize();
-    time.stop();
-
     
     delete[](sizes);
     
-    
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-    
     if(res_to_vec){
-        char * h_match_result = new char[text_size];
-        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        int * h_match_result = new int[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(int),cudaMemcpyDeviceToHost);
         for (int i = 0; i < text_size; i++){
             if (h_match_result[i]){
-                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+                res.push_back(std::pair<int,int>(i,h_match_result[i]));
             }
         }
 
         delete[] (h_match_result);
     }
     
-    if(verbose){
-        write_from_device(&dresult_buf,text_size);
-    }
-
-    
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
-    // cudaFree(dpatterns);
-    // cudaFree(dsizes);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
 }
 
 
@@ -348,8 +325,6 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
         len += sizes[i];     
     }
     
-    int loffset = 0;
-
     char* dtextptr;
     size_t text_size;
 
@@ -358,21 +333,12 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
         return;
     }
     
-    char* dresult_buf;
+    int* dresult_buf;
     
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     
     //nochunk only
     dim3 block(block_size);
-    long grid_size;
-    long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
-
-    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-    // gsqrt = (int)sqrt(grid_size) + 1;
-    // dim3 grid(gsqrt,gsqrt);
     int num_blocks = (text_size + block.x - 1) / block.x;
     int p = num_blocks / 32768;
     dim3 grid;
@@ -390,55 +356,59 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
               "long threadId = blockId * (long)blockDim.x + (long)threadIdx.x;\n"
               "return threadId;\n}\n";
 
-    kernel += "__constant__ char mpatterns[128*64];\n";
+    kernel += "__constant__ char mpatterns[1024*40];\n";
     kernel += "__global__\n";
-    kernel += "void multiple_match_const_unroll(char* text, long text_size, char* result_buf) {\n";
+    kernel += "void multiple_match_const_unroll(char* text, long text_size, int* result_buf) {\n";
     kernel += "    long t_id = threadId();\n"
 
               "    if(t_id < text_size){\n"
-              "       int p_offset = 0;\n"
+            //   "       int p_offset = 0;\n"
               "       int matched = 1;\n"
               "       int match_result = 0;\n"
         // result_buf[t_id] = 0;
 
-              "       if(t_id < text_size -" + std::to_string(max) + " + 1){\n";
+              "       if(t_id < text_size -" + std::to_string(max - 1) + "){\n";
 
     std::string cycle;
     std::string cycle_elem;
     int i = 0;
+    int p_offset = 0;
     
     for(auto &vp : vpatterns){
-        cycle += "      matched = 1;\n"
-                 "      #pragma unroll\n"
-                 "      for(int j = 0; j < " + std::to_string(vp.size()) +"; j++) {\n"
-                 "          if(text[t_id + j] != mpatterns[j + p_offset]) {\n"
-                 "             matched = -1;\n"
-                 "             break;\n"
-                 "          }\n"
-                 "      }\n"
-                 "      if(matched == 1) {\n"
-                 "          match_result = " + std::to_string(i) + "+1;\n"
-                 "      }\n"
-                 "      p_offset += " + std::to_string(vp.size()) + ";\n";
+        cycle += "matched = 1;\n";
+        cycle += "      if(text[t_id + " + std::to_string(0) + "] != mpatterns[" + std::to_string(p_offset) + "]){\n" //+ std::to_string((int)vp[0]) + "){\n"
+                     "      matched = -1;\n"
+                     "  }\n"; 
+        for(int j = 1; j < vp.size(); j++){
+            cycle += "  else if(text[t_id + " + std::to_string(j) + "] != mpatterns[" + std::to_string(p_offset + j) + "]){\n" //+ std::to_string((int)vp[j]) + "){\n"
+                     "      matched = -1;\n"
+                     "  }\n";
+        }
+        cycle += "      if(matched == 1) {\n"
+                 "          match_result = " + std::to_string(i + 1) + ";\n"
+                 "      }\n";
+        p_offset += vp.size();
         i++;                
     }
     cycle +="   }else{\n";
 
     i = 0;
+    p_offset = 0;
     for(auto &vp : vpatterns){
-        cycle += "      matched = 1;\n"
-                 "      if(t_id < text_size - " + std::to_string(vp.size()) + " + 1){\n"
-                 "      #pragma unroll\n"
-                 "      for(int j = 0; j < " + std::to_string(vp.size()) +"; j++) {\n"
-                 "          if(text[t_id + j] != mpatterns[j + p_offset]) {\n"
-                 "              matched = -1;\n"
-                 "              break;\n"
-                 "          }\n"
-                 "      }\n"
-                 "      if(matched == 1) {\n"
-                 "         match_result = " + std::to_string(i) + "+1;\n"
-                 "      }\n}\n"
-                 "      p_offset += " + std::to_string(vp.size()) + ";\n";
+        cycle += "matched = 1;\n";
+        cycle += "   if(t_id < text_size - " + std::to_string(vp.size() - 1) + "){\n";
+        cycle += "      if(text[t_id + " + std::to_string(0) + "] != mpatterns[" + std::to_string(p_offset) + "]){\n" //+ std::to_string((int)vp[0]) + "){\n"
+                     "      matched = -1;\n"
+                     "  }\n"; 
+        for(int j = 1; j < vp.size(); j++){
+            cycle += "  else if(text[t_id + " + std::to_string(j) + "] != mpatterns[" + std::to_string(p_offset + j) + "]){\n" //+ std::to_string((int)vp[j]) + "){\n"
+                     "      matched = -1;\n"
+                     "  }\n";
+        }
+        cycle += "      if(matched == 1) {\n"
+                 "          match_result = " + std::to_string(i + 1) + ";\n"
+                 "      }\n}\n";
+        p_offset += vp.size();
         i++;                
     }
     cycle +="   }\n";
@@ -446,6 +416,13 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
     kernel += cycle;
     kernel += "result_buf[t_id] = match_result;\n}\n}";
 
+    //dump kernel
+
+    // std::ofstream dump_file;
+    
+    // dump_file.open("const_kernel_dump");
+    // dump_file << kernel;
+    // dump_file.close();
 
     static jitify::JitCache kernel_cache;
     jitify::Program program = kernel_cache.program(kernel);
@@ -455,9 +432,11 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
 
     char * cvpatterns = new char[len];
     
+    int loffset = 0;
+
     for(auto &vp : vpatterns){
-        for(int j = loffset, i = 0; j < loffset + vp.size(); j++, i++){
-            cvpatterns[j] = vp[i];
+       for(int j = loffset, i = 0; j < loffset + vp.size(); j++, i++){
+           cvpatterns[j] = vp[i];
         }
         loffset += vp.size();
         
@@ -465,7 +444,7 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
 
     // for(int i = 0; i < vpatterns.size(); i++){
     cuMemcpyHtoD(kernel_instance.get_constant_ptr("mpatterns"), cvpatterns, len);
-        // loffset += sizes[i];
+    //    loffset += sizes[i];
     // }
     CudaCheckError();
 
@@ -475,37 +454,27 @@ void multipattern_match_const_unroll_wrapper(std::vector<std::string> vpatterns,
     RUN(kernel_instance.configure(grid, block)
        .launch(dtextptr,text_size,dresult_buf))
     cudaDeviceSynchronize();
-    time.stop();
-
     
     delete[](sizes);
     
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-    
     if(res_to_vec){
-        char * h_match_result = new char[text_size];
-        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        int * h_match_result = new int[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(int),cudaMemcpyDeviceToHost);
         for (int i = 0; i < text_size; i++){
             if (h_match_result[i]){
-                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+                res.push_back(std::pair<int,int>(i,h_match_result[i]));
             }
         }
 
         delete[] (h_match_result);
     }
-    
-    if(verbose){
-        write_from_device(&dresult_buf,text_size);
-    }
 
     
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
-    // cudaFree(dpatterns);
-    // cudaFree(dsizes);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
 }
+
+
 
 __global__ void match_multy_shared(char* patterns, int* p_sizes, int p_number,int p_len, char* text, long text_size, char* result_buf){
     
@@ -597,14 +566,17 @@ __global__ void match_chunk(char* pattern, int pattern_size, int chunk_size ,cha
     if(left_bound < text_size){
         for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
-            result_buf[left_bound + i] = 0;
             int matched = 1;
             
-            for(int j = 0; j < pattern_size; j++) {
+            if(left_bound + i + pattern_size - 1 >= text_size){
+                matched = -1;
+            } else {
+                for(int j = 0; j < pattern_size ; j++) {
 
-                if(text[left_bound + i + j] != pattern[j]) {
-                    matched = -1;
-                    break;
+                    if(text[left_bound + i + j] != pattern[j]) {
+                        matched = -1;
+                        break;
+                    }
                 }
             }
 
@@ -648,10 +620,6 @@ __global__ void kmp_chunk(int* prefix_table, char* pattern,int pattern_size,char
     int ams = 0;
 
     for(long i = left_bound; i < right_bound; i++){
-        
-        if (i < left_bound + chunk) {
-            result_buf[i] = 0;
-        }
 
         while(ams > 0 && pattern[ams] != text[i]){
             ams = prefix_table[ams-1];
@@ -701,7 +669,7 @@ __global__ void kmp_nochunk(int* prefix_table, char* pattern,int pattern_size,ch
     }
 }
 
-__constant__ char c_pattern[128*64]; //might be as fast as registers, but not in this case =)
+__constant__ char c_pattern[512]; //might be as fast as registers, but not in this case =)
 
 __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, long text_size, char* result_buf) {
 
@@ -713,14 +681,17 @@ __global__ void match_chunk_const(int pattern_size, int chunk_size ,char* text, 
     if(left_bound < text_size){
         for (long i = 0; i < chunk_size && left_bound + i < text_size; i++) {
 
-            result_buf[left_bound + i] = 0;
             int matched = 1;
 
-            for(int j = 0; j < pattern_size; j++) {
-                
-                if(text[left_bound + i + j] != c_pattern[j]) {
-                    matched = -1;
-                    break;
+            if(left_bound + i + pattern_size - 1 >= text_size){
+                matched = -1;
+            } else {
+                for(int j = 0; j < pattern_size ; j++) {
+
+                    if(text[left_bound + i + j] != c_pattern[j]) {
+                        matched = -1;
+                        break;
+                    }
                 }
             }
 
@@ -739,7 +710,6 @@ __global__ void match_const(int pattern_size, char* text, long text_size, char* 
 
     if(t_id < text_size){
         int matched = 1;
-        result_buf[t_id] = 0;
         if(t_id < text_size - pattern_size + 1){
 
             for(int i = 0; i < pattern_size; i++) {
@@ -758,7 +728,7 @@ __global__ void match_const(int pattern_size, char* text, long text_size, char* 
 }
 
 
-__constant__ int c_prefix[128*64];
+__constant__ int c_prefix[128];
 
 __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char* result_buf,int chunk){
     
@@ -770,12 +740,10 @@ __global__ void kmp_chunk_const(int pattern_size,char* text, int text_size, char
     int ams = 0;
 
     for(long i = left_bound; i < right_bound; i++){
-        
-        if (i < left_bound + chunk) {
-            result_buf[i] = 0;
-        }
 
-        while(ams > 0 && c_pattern[ams] != text[i]){
+        char curChar = text[i];
+
+        while(ams > 0 && c_pattern[ams] != curChar){
             ams = c_prefix[ams-1];
         }
 
@@ -826,21 +794,13 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
         loffset += sizes[i];
     }
     
-    char* dresult_buf;
+    int* dresult_buf;
     
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     
     //nochunk only
     dim3 block(block_size);
-    long grid_size;
-    long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
 
-    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-    // gsqrt = (int)sqrt(grid_size) + 1;
-    // dim3 grid(gsqrt,gsqrt);
     int num_blocks = (text_size + block.x - 1) / block.x;
     int p = num_blocks / 32768;
     dim3 grid;
@@ -850,27 +810,19 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
     } else {
         grid.x = num_blocks;
     }
-    match_multy<<<grid,block>>>(dpatterns,dsizes,vpatterns.size(),max,dtextptr,text_size,dresult_buf);
+    RUN((match_multy<<<grid,block>>>(dpatterns,dsizes,vpatterns.size(),max,dtextptr,text_size,dresult_buf)))
     cudaDeviceSynchronize();
-    time.stop();
 
     
     delete[](sizes);
-    
-    
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-    
-    if(verbose){
-        write_from_device(&dresult_buf,text_size);
-    }
 
     if(res_to_vec){
 
-        char * h_match_result = new char[text_size];
-        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        int * h_match_result = new int[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(int),cudaMemcpyDeviceToHost);
         for (int i = 0; i < text_size; i++){
             if (h_match_result[i]){
-                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+                res.push_back(std::pair<int,int>(i,h_match_result[i]));
             }
         }
         delete[] (h_match_result);
@@ -879,9 +831,7 @@ void multipattern_match_wrapper(std::vector<std::string> vpatterns, std::string 
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
     cudaFree(dpatterns);
-    cudaFree(dsizes);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);  
+    cudaFree(dsizes); 
 }
 
 
@@ -900,7 +850,6 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
     int loffset = 0;
 
     char* dpatterns;
-    int* dsizes;
 
     char* dtextptr;
     size_t text_size;
@@ -909,9 +858,6 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
         std::cout << "error opening file" << "\n";
         return;
     }
-    
-    // cudaMalloc((void**)&dsizes, (vpatterns.size())*sizeof(int));
-    // cudaMemcpy((void*)dsizes, sizes, (vpatterns.size())*sizeof(int), cudaMemcpyHostToDevice); 
     
     cudaMemcpyToSymbol(cp_sizes, sizes, vpatterns.size() * sizeof(int)); 
 
@@ -928,15 +874,7 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
     
     //nochunk only
     dim3 block(block_size);
-    long grid_size;
-    long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
 
-    // grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-    // gsqrt = (int)sqrt(grid_size) + 1;
-    // dim3 grid(gsqrt,gsqrt);
     int num_blocks = (text_size + block.x - 1) / block.x;
     int p = num_blocks / 32768;
     dim3 grid;
@@ -948,14 +886,10 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
     }
     match_multy_const_sizes<<<grid,block>>>(dpatterns,vpatterns.size(),max,dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
-    time.stop();
 
     
     delete[](sizes);
-    
-    
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-    
+        
     if(verbose){
         write_from_device(&dresult_buf,text_size);
     }
@@ -974,10 +908,7 @@ void multipattern_match_const_sizes_wrapper(std::vector<std::string> vpatterns, 
     
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
-    cudaFree(dpatterns);
-    // cudaFree(dsizes);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);  
+    cudaFree(dpatterns); 
 }
 
 
@@ -1023,22 +954,14 @@ void multipattern_match_shared_wrapper(std::vector<std::string> vpatterns, std::
     dim3 block(block_size);
     long grid_size;
     long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
 
     grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
     gsqrt = (int)sqrt(grid_size) + 1;
     dim3 grid(gsqrt,gsqrt);
     match_multy_shared<<<grid,block,len * sizeof(char)>>>(dpatterns,dsizes,vpatterns.size(),len,dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
-    time.stop();
-
     
     delete[](sizes);
-    
-    
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
     if(res_to_vec){
         char * h_match_result = new char[text_size];
@@ -1063,27 +986,83 @@ void multipattern_match_shared_wrapper(std::vector<std::string> vpatterns, std::
     // cudaEventDestroy(stop);  
 }
 
-// void prefix(const char* pattern, int pattern_size, int* prefix_table){
+void prefix(const char* pattern, int pattern_size, int* prefix_table){
     
-//     prefix_table[0] = 0;
+    prefix_table[0] = 0;
     
-//     for (int i = 1; i < pattern_size; ++i) {
+    for (int i = 1; i < pattern_size; ++i) {
 		
-//         int j = prefix_table[i-1];
+        int j = prefix_table[i-1];
 		
-//         while (j > 0 && pattern[i] != pattern[j]){
+        while (j > 0 && pattern[i] != pattern[j]){
 			
-//             j = prefix_table[j-1];
+            j = prefix_table[j-1];
         
-//         }
+        }
 		
-//         if (pattern[i] == pattern[j])  ++j;
+        if (pattern[i] == pattern[j])  ++j;
 		
-//         prefix_table[i] = j;
-// 	}
-// }
+        prefix_table[i] = j;
+	}
+}
 
-void match_naive_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,int verbose){ //nochunk == 0 => nochunk
+void match_naive_constant_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,std::vector<std::pair<int,int>> &res, int res_to_vec){ //nochunk == 0 => nochunk
+
+    auto pattern_size = pattern.size();
+
+    cudaMemcpyToSymbol(c_pattern,pattern.c_str(),pattern_size);
+    
+    char* dtextptr;
+    size_t text_size;
+
+    if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
+    
+    char* dresult_buf;
+    
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMemset(dresult_buf,0,text_size);
+    
+    int chunk = 256;
+
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+    
+    if(nochunk){
+        grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        RUN((match_const<<<grid,block>>>(pattern_size,dtextptr,text_size,dresult_buf)))
+        cudaDeviceSynchronize();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        RUN((match_chunk_const<<<grid,block>>>(pattern_size,chunk,dtextptr,text_size,dresult_buf)))
+        cudaDeviceSynchronize();
+    }
+    
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(char),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+    }
+
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+
+}
+
+
+
+void match_naive_wrapper(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset,std::vector<std::pair<int,int>> &res, int res_to_vec){ //nochunk == 0 => nochunk
 
     auto pattern_size = pattern.size();
     
@@ -1102,36 +1081,37 @@ void match_naive_wrapper(std::string pattern, std::string subject_string_filenam
     char* dresult_buf;
     
     cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
-    
+    cudaMemset(dresult_buf,0,text_size);
+
     int chunk = 256;
 
     dim3 block(block_size);
     long grid_size;
     long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
-    
+
     if(nochunk){
         grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
         gsqrt = (int)sqrt(grid_size) + 1;
         dim3 grid(gsqrt,gsqrt);
-        match<<<grid,block>>>(dpattern,pattern_size,dtextptr,text_size,dresult_buf);
+        RUN((match<<<grid,block>>>(dpattern,pattern_size,dtextptr,text_size,dresult_buf)))
         cudaDeviceSynchronize();
-        time.stop();
     } else{
         grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
         gsqrt = (int)sqrt(grid_size) + 1;
         dim3 grid(gsqrt,gsqrt);
-        match_chunk<<<grid,block>>>(dpattern,pattern_size,chunk,dtextptr,text_size,dresult_buf);
+        RUN((match_chunk<<<grid,block>>>(dpattern,pattern_size,chunk,dtextptr,text_size,dresult_buf)))
         cudaDeviceSynchronize();
-        time.stop();
+        CudaCheckError();
     }
-
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
-    if(verbose){
-        write_from_device(&dresult_buf,text_size);
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(char),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
     }
 
     cudaFree(dresult_buf);
@@ -1240,22 +1220,15 @@ void multipattern_match_texture_wrapper(std::vector<std::string> vpatterns, std:
     dim3 block(block_size);
     long grid_size;
     long gsqrt;
-    am::timer time;
-    std::cout << "running ..." << "\n";
-    time.start();
 
     grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
     gsqrt = (int)sqrt(grid_size) + 1;
     dim3 grid(gsqrt,gsqrt);
     match_tex<<<grid,block>>>(dsizes,vpatterns.size(),dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
-    time.stop();
-
     
     delete[](sizes);
     
-    
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
     
     if(verbose){
         write_from_device(&dresult_buf,text_size);
@@ -1281,9 +1254,6 @@ void multipattern_match_texture_wrapper(std::vector<std::string> vpatterns, std:
 
     //unbind
     cudaUnbindTexture(patterns_tex);
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop); 
-
 }
 
 
@@ -1343,66 +1313,76 @@ void multipattern_match_texture_wrapper(std::vector<std::string> vpatterns, std:
 // }
 
 
-// void match_kmp(std::string pattern, std::string subject_string_filename, int nochunk,long size,long offset,int verbose){ //nochunk == 0 => nochunk
+void match_kmp(std::string pattern, std::string subject_string_filename, int constant, long size, long offset, int verbose, std::vector<std::pair<int,int>> &res, int res_to_vec){ //nochunk == 0 => nochunk
 
-//     auto pattern_size = pattern.size();
+    auto pattern_size = pattern.size();
     
-//     char* dtextptr;
-//     long text_size;
-//     if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
-//         std::cout << "error opening file" << "\n";
-//         return;
-//     }
+    char* dtextptr;
+    size_t text_size;
+    if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
+        std::cout << "error opening file" << "\n";
+        return;
+    }
     
-//     char *dpattern;
-//     cudaMalloc((void**)&dpattern, pattern_size * sizeof(char));
-//     cudaMemcpy((void*)dpattern,pattern.c_str(),pattern_size * sizeof(char),cudaMemcpyHostToDevice); 
+    char *dpattern;
+    cudaMalloc((void**)&dpattern, pattern_size * sizeof(char));
+    cudaMemcpy((void*)dpattern,pattern.c_str(),pattern_size * sizeof(char),cudaMemcpyHostToDevice); 
 
-//     int* prefix_table = new int[pattern_size];
-//     prefix(pattern.c_str(),pattern_size,prefix_table);
-//     int* dprefix_table;
-
-//     cudaMalloc((void**)&dprefix_table, pattern_size * sizeof(int));
-//     cudaMemcpy((void*)dprefix_table,prefix_table,pattern_size * sizeof(int),cudaMemcpyHostToDevice); 
-//     delete[](prefix_table);
-
-//     char* dresult_buf;
-//     // std::cout << "text length : " << text_size << "\n";
-//     //think about data transfer;
-//     cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    int* prefix_table = new int[pattern_size];
     
-//     int chunk = 256;
-
-//     dim3 block(block_size);
-//     long grid_size;
-//     long gsqrt;
-//     am::timer time;
-//     std::cout << "running ..." << "\n";
-//     time.start();
+    prefix(pattern.c_str(),pattern_size,prefix_table);
     
-//     if(nochunk){
-//         grid_size = (text_size + (long)block.x - 1L) / (long)block.x;
-//         gsqrt = (int)sqrt(grid_size) + 1;
-//         dim3 grid(gsqrt,gsqrt);
-//         kmp_nochunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
-//         cudaDeviceSynchronize();
-//         time.stop();
-//     } else{
-//         grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
-//         gsqrt = (int)sqrt(grid_size) + 1;
-//         dim3 grid(gsqrt,gsqrt);
-//         kmp_chunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk);
-//         cudaDeviceSynchronize();
-//         time.stop();
-//     }
-//     std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
+    int* dprefix_table;
 
-//     if(verbose){
-//         write_from_device(&dresult_buf,text_size);
-//     }
+    cudaMalloc((void**)&dprefix_table, pattern_size * sizeof(int));
+    cudaMemcpy((void*)dprefix_table,prefix_table,pattern_size * sizeof(int),cudaMemcpyHostToDevice); 
+
+    char* dresult_buf;
+    //think about data transfer;
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMemset(dresult_buf,0,text_size);
     
-//     cudaFree(dresult_buf);
-//     cudaFree(dtextptr);
-//     cudaFree(dpattern);
-//     cudaFree(dprefix_table); 
-// }
+    int chunk = 256;
+
+    dim3 block(block_size);
+    long grid_size;
+    long gsqrt;
+
+    if(constant){
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        cudaMemcpyToSymbol(c_pattern,pattern.c_str(),pattern.size());
+        cudaMemcpyToSymbol(c_prefix,prefix_table,pattern.size() * sizeof(int));
+
+        RUN((kmp_chunk_const<<<grid,block>>>(pattern_size,dtextptr,text_size,dresult_buf,chunk)))
+        cudaDeviceSynchronize();
+    } else{
+        grid_size = (((text_size + (long)chunk - (long)1) / (long)chunk) + (long)block.x - 1L) / (long)block.x;
+        gsqrt = (int)sqrt(grid_size) + 1;
+        dim3 grid(gsqrt,gsqrt);
+        RUN((kmp_chunk<<<grid,block>>>(dprefix_table,dpattern,pattern_size,dtextptr,text_size,dresult_buf,chunk)))
+        cudaDeviceSynchronize();
+    }
+
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(char),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+    }
+
+    if(verbose){
+        write_from_device(&dresult_buf,text_size);
+    }
+
+    delete[](prefix_table);
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+    cudaFree(dpattern);
+    cudaFree(dprefix_table); 
+}

@@ -1,12 +1,14 @@
-#include "../spec_match.hpp"
 #include "BenchKernels.hpp"
+
+#include <cassert>
 
 __constant__ int mini_array [2];
 
-__global__ void dummy_kernel(){
+__global__ void dummy_kernel(int* dst){
     
     int t_id = threadIdx.x;
     int i = 42;
+    dst[t_id] = mini_array[0];
 }
 
 __global__ void mini_kernel(int* src, int* dst, int* clocks){
@@ -65,12 +67,27 @@ __global__ void mini_kernel_2(int* src, int* dst, int* clocks){
 
     int t_id = blockIdx.x * gridDim.x + threadIdx.x;
 
-    int val1,val2,val3;
-    val1 = 42; //
-    val2 = src[t_id]; // L1 miss
-    val3 = src[t_id + 1]; //L1
+    int val1 = 1;
+    int val2,val3;
+    int start,end;
 
-    dst[t_id] = val3;
+    int* ptr = mini_array;
+
+    // start = clock();
+    asm volatile("mov.u32 %0, %%clock;" : "=r"(start) :: "memory");
+
+    // asm volatile("ld.const.u32 %0, [%1];": "=r"(val1) : "l"(mini_array));
+    asm volatile("ld.global.u32 %0, [%1];": "=r"(val1) : "l"(src));
+    
+    asm volatile("mov.u32 %0, %%clock;" : "=r"(end) :: "memory");
+    // end = clock();
+    // val1 = 42; //
+    // val2 = src[t_id]; // L1 miss
+    // val3 = src[t_id + 1]; //L1
+    // val1 = mini_array[0];
+
+    clocks[0] = end - start; 
+    dst[t_id] = val1;
 }
 
 void set_const_mem(int * host_mem, int size){
@@ -78,7 +95,8 @@ void set_const_mem(int * host_mem, int size){
 }
 
 void mini_kernel_wrap(dim3 grid,dim3 block,int* src, int* dst,int* clocks){
-    dummy_kernel<<<1,1>>>();
-    mini_kernel_2<<<grid,block>>>(src, dst, clocks);
+    dummy_kernel<<<1,1>>>(dst);
     mini_kernel<<<grid,block>>>(src, dst, clocks);
+    mini_kernel_2<<<grid,block>>>(src, dst, clocks);
+    
 }

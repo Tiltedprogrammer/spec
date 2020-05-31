@@ -18,17 +18,90 @@
 #include "utils.hpp"
 
 
-void match_pe(std::string subject_string_filename,long size, long offset,std::string program_, int verbose) {
+void match_pe(std::string pattern, std::string subject_string_filename, long size, long offset, int verbose,std::vector<std::pair<int,int>> &res, int res_to_vec) {
     
-        
-    std::string program = std::string((char*)fun_impala) + program_;
+    std::string pattern_embedded;
+    for(auto ch: pattern){
+        pattern_embedded += std::to_string((int)ch);
+        pattern_embedded += "u8,";
+    }
+    pattern_embedded.pop_back();
 
-    std::cout << "compiling ... " << std::flush;
+    std::string r_naive_spec;
+
+    r_naive_spec += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
+
+    r_naive_spec += "  string_match_pseudoKMP([" + pattern_embedded + "],"
+              + std::to_string(pattern.size()) + ",32i8 ,text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
+
+    std::string program = std::string((char*)fun_impala) + r_naive_spec;
+
+    std::cout << "compiling ... " << std::endl;
     am::timer time;
-    // time.start();
-
+    time.start();
     auto key = anydsl_compile(program.c_str(),program.size(),0);
+    time.stop();
     typedef void (*function) (const char*, long, char *);
+    auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
+    
+    if (call == nullptr) {
+        std::cout << "compilation failed\n";
+        return;
+    }
+
+    std::cout << "Compile time: " << time.milliseconds() << std::endl;
+
+    size_t text_size;
+    char* dtextptr;
+    if((dtextptr = read_file(subject_string_filename,text_size,size,offset))==nullptr){
+        std::cout << "error reading file" << "\n";
+        return;
+    }
+
+
+    char* dresult_buf;
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMemset(dresult_buf,0,text_size);
+    
+    call(dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
+
+
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(char),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                // printf("At position %4d, match pattern %d\n", i, (int)h_match_result[i]);
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+    }
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+}
+
+
+void match_pe_kmp(std::string pattern, std::string subject_string_filename, long size, long offset, int verbose,std::vector<std::pair<int,int>> &res, int res_to_vec) {
+    
+    std::string pattern_embedded;
+    for(auto ch: pattern){
+        pattern_embedded += std::to_string((int)ch);
+        pattern_embedded += "u8,";
+    }
+    pattern_embedded.pop_back();
+
+    std::string r_naive_spec;
+
+    r_naive_spec += "\nextern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[i32]) -> (){\n";
+
+    r_naive_spec += "  match_kmp([" + pattern_embedded + "],"
+              + std::to_string(pattern.size()) + ",text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256)}"; //;
+
+    std::string program = std::string((char*)fun_impala) + r_naive_spec;
+    auto key = anydsl_compile(program.c_str(),program.size(),0);
+    typedef void (*function) (const char*, long, int *);
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
     if (call == nullptr) {
@@ -45,23 +118,87 @@ void match_pe(std::string subject_string_filename,long size, long offset,std::st
         return;
     }
 
-    char* dresult_buf;
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    int* dresult_buf;
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
+    cudaMemset(dresult_buf,0,text_size * sizeof(int));
     
-    std::cout << "running ... " << "\n";
-    time.start();
     
     call(dtextptr,text_size,dresult_buf);
     cudaDeviceSynchronize();
 
-    time.stop();
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-
-    if(verbose){
-       
-        write_from_device(&dresult_buf,text_size);
-    
+    if(res_to_vec){
+        int * h_match_result = new int[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(int),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if (h_match_result[i]){
+                // printf("At position %4d, match pattern %d\n", i, (int)h_match_result[i]);
+                res.push_back(std::pair<int,int>(i,h_match_result[i]));
+            }
+        }
     }
+
+    
+    cudaFree(dresult_buf);
+    cudaFree(dtextptr);
+}
+
+
+void match_naive_single(std::string pattern, std::string subject_string_filename, int nochunk, long size, long offset, int verbose, std::vector<std::pair<int,int>> &res, int res_to_vec) {
+    
+    std::string pattern_embedded;
+    for(auto ch: pattern){
+        pattern_embedded += std::to_string((int)ch);
+        pattern_embedded += "u8,";
+    }
+    pattern_embedded.pop_back();
+
+    std::string r_naive_spec;
+
+    r_naive_spec += "\nextern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
+
+    r_naive_spec += "  string_match([" + pattern_embedded + "],"
+              + std::to_string(pattern.size()) + ",text, text_size,result_buf," + std::to_string(BLOCK_SIZE) + ",256," + std::to_string(nochunk) + ")}"; //;
+
+    std::string program = std::string((char*)fun_impala) + r_naive_spec;
+    auto key = anydsl_compile(program.c_str(),program.size(),0);
+    typedef void (*function) (const char*, long, unsigned char *);
+    auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
+    
+    if (call == nullptr) {
+        std::cout << "compiliacion failed\n";
+        return;
+    } else {
+        std::cout << "succesfully compiled\n";
+    }
+
+    size_t text_size;
+    char* dtextptr;
+    if((dtextptr = read_file(subject_string_filename,text_size,size,offset)) == nullptr){
+        std::cout << "error reading file" << "\n";
+        return;
+    }
+
+    unsigned char* dresult_buf;
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMemset(dresult_buf,0,text_size);
+    
+    std::cout << "running ... " << "\n";
+    
+    call(dtextptr,text_size,dresult_buf);
+    cudaDeviceSynchronize();
+
+    if(res_to_vec){
+        char * h_match_result = new char[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(char),cudaMemcpyDeviceToHost);
+        for (int i = 0; i < text_size; i++){
+            if ((int)h_match_result[i]){
+                // printf("At position %4d, match pattern %d\n", i, (int)h_match_result[i]);
+                res.push_back(std::pair<int,int>(i,(int)h_match_result[i]));
+            }
+        }
+    }
+
+    
     cudaFree(dresult_buf);
     cudaFree(dtextptr);
 }
@@ -116,7 +253,7 @@ void match_pe_pat(std::string subject_string_filename,std::string program_,std::
     cudaFree(dtextptr);
 }
 
-void match_nope(std::string subject_string_filename,std::string pattern,int pattern_size, int nochunk, fun f,long size,long offset,int verbose) {
+void match_nope(std::string pattern, std::string subject_string_filename, int pattern_size, int nochunk, fun f,long size,long offset,int verbose) {
     
     am::timer time;
 
@@ -315,12 +452,20 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
     }
     patterns.pop_back(); //remove last ',';
 
-    int block_num = (text_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int num_blocks = (text_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    
+    dim3 dimGrid;
+    int p = num_blocks >> 15 ;
+    dimGrid.x = num_blocks ;
+    if ( p ){
+        dimGrid.x = 1<<15 ;
+        dimGrid.y = p+1 ;
+    }
     //maybe asyncronous read from disk and jit;
-    dummy_fun += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[u8]) -> (){\n";
+    dummy_fun += "extern fn dummy(text : &[u8], text_size : i64, result_buf : &mut[i32], gx : i32, gy : i32) -> (){\n";
 
     dummy_fun += "  string_match_multiple([" + patterns + "],"
-              + "["+ sizes + "]" + "," + std::to_string(vpatterns.size()) + "u8," + std::to_string(max_len) + ",text, text_size,result_buf,"+std::to_string(BLOCK_SIZE) + "," + std::to_string(block_num) + ")}"; //;
+              + "["+ sizes + "]" + "," + std::to_string(vpatterns.size()) + "," + std::to_string(max_len) + ",text, text_size,result_buf,"+std::to_string(BLOCK_SIZE) + ",gx,gy)}"; //;
 
     std::string program = std::string((char*)fun_impala) + dummy_fun;
 
@@ -332,35 +477,26 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
     time.stop();
     std::cout << "compilation time " << time.milliseconds() << std::endl;
     time.reset();
-    typedef void (*function) (const char*, long, const char *);
+    typedef void (*function) (const char*, long, const int *,int,int);
     auto call = reinterpret_cast<function>(anydsl_lookup_function(key,"dummy"));
     
     if (call == nullptr) {
         std::cout << "compiliacion failed\n";
         return;
-    } else {
-        std::cout << "succesfully compiled\n";
     }
 
-    std::cout << "\n";
     
-    char* dresult_buf;
+    int* dresult_buf;
     
-    cudaMalloc((void**)&dresult_buf, text_size * sizeof(char));
+    cudaMalloc((void**)&dresult_buf, text_size * sizeof(int));
     //think about data transfer;
-  
-    std::cout << "running ... " << "\n";
-    time.start();
     
-    call(dtextptr,text_size,dresult_buf);
+    call(dtextptr,text_size,dresult_buf,dimGrid.x,dimGrid.y);
     cudaDeviceSynchronize();
 
-    time.stop();
-    std::cout << "running time " << time.milliseconds() << " ms" << std::endl;
-
     if(res_to_vec){
-        char * h_match_result = new char[text_size];
-        cudaMemcpy(h_match_result,dresult_buf,text_size,cudaMemcpyDeviceToHost);
+        int * h_match_result = new int[text_size];
+        cudaMemcpy(h_match_result,dresult_buf,text_size * sizeof(int),cudaMemcpyDeviceToHost);
         for (int i = 0; i < text_size; i++){
             if (h_match_result[i]){
                 // printf("At position %4d, match pattern %d\n", i, (int)h_match_result[i]);
@@ -369,9 +505,6 @@ void match_pe_pointer_multipattern(std::vector<std::string> vpatterns, std::stri
         }
     }
     
-    if(verbose){
-        write_from_device(&dresult_buf,text_size);
-    }
     
     cudaFree(dresult_buf);
     cudaFree(dtextptr);

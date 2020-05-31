@@ -15,7 +15,7 @@
 #include "jitify.hpp"
 // #include "cuda_runtime.h"
 
-#define ITERATIONS 20
+#define ITERATIONS ITERATIONS_CMAKE
 #ifdef BENCHMARK
 #define RUN(kernel) \
     cudaEvent_t start, stop;\

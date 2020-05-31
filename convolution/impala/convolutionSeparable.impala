@@ -9,11 +9,12 @@ fn rowConvolutionFilter(
     @pitch : i32,
     @block_sizeX : i32,
     @block_sizeY : i32,
-    @RESULT_STEP : i32)->(){
+    @RESULT_STEP : i32,
+    @HALO        : i32)->(){
 
     let kernel_length : i32 = kernel_radius * 2 + 1;
     // let RESULT_STEP = 8;
-    let HALO = 1;
+    // let HALO = 1;
 
     let sDataWidth = (RESULT_STEP + 2 * HALO) * block_sizeX;
     //more then a half of the available shared mem
@@ -80,11 +81,12 @@ fn colConvolutionFilter(
     @pitch : i32,
     @block_sizeX : i32,
     @block_sizeY : i32,
-    @RESULT_STEP : i32) -> (){
+    @RESULT_STEP : i32,
+    @HALO : i32) -> (){
 
         let kernel_length : i32 = kernel_radius * 2 + 1;
         // let RESULT_STEP = 8;
-        let HALO = 1;
+        // let HALO = 1;
 
         let sDataWidth = (RESULT_STEP + 2 * HALO) * block_sizeY + 1;
         //more then a half of the available shared mem
@@ -140,7 +142,8 @@ fn convolveImpala(d_Src : &[f32],
     @pitch : i32,
     @block_sizeX : i32,
     @block_sizeY : i32,
-    @RESULT_STEP : i32) -> (){
+    @RESULT_STEP : i32,
+    @HALO        : i32) -> (){
 
         let grid_xR = (imageW + block_sizeX * RESULT_STEP - 1) / (block_sizeX * RESULT_STEP);
         let grid_yR = (imageH + block_sizeY - 1) / block_sizeY;
@@ -152,7 +155,7 @@ fn convolveImpala(d_Src : &[f32],
         //merge columnt and row filters;
 
         cuda(0,gridRow,threadsROW, || {
-            rowConvolutionFilter(d_Src,d_Buf,kernel,kernel_radius,imageH,imageW,pitch,block_sizeX,block_sizeY,RESULT_STEP);
+            rowConvolutionFilter(d_Src,d_Buf,kernel,kernel_radius,imageH,imageW,pitch,block_sizeX,block_sizeY,RESULT_STEP,HALO);
         });
         //X,Y are symmetric:
         let threadsCOL = (block_sizeY,block_sizeX,1);
@@ -161,7 +164,7 @@ fn convolveImpala(d_Src : &[f32],
         let gridCol = (grid_xC * threadsCOL(0),grid_yC * threadsCOL(1),1);
 
         cuda(0,gridCol,threadsCOL, || {
-            colConvolutionFilter(d_Buf,d_Dst,kernel,kernel_radius,imageH,imageW,pitch,block_sizeY,block_sizeX,RESULT_STEP);
+            colConvolutionFilter(d_Buf,d_Dst,kernel,kernel_radius,imageH,imageW,pitch,block_sizeY,block_sizeX,RESULT_STEP,HALO);
         });
 
         return()

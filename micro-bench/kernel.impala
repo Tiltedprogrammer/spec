@@ -1,0 +1,8 @@
+extern fn kernel(src : &[i32],dst : &mut[i32], @num : i32)->(){
+    let block = (1,1,1);
+    let grid = (1,1,1);
+    with cuda(0,grid,block){
+        let i = src(0);
+        dst(0) = i / num;
+    }
+}

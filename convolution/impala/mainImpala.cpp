@@ -129,16 +129,14 @@ int main(int argc, char** argv) {
     int block_sizeX = 32;
     int block_sizeY = 16;
     int result_step = 8;
+    int halo = 1;
 
     if(KERNEL_LENGTH <= 63 ){ //radius < 31
-        block_sizeX = 32;
-        block_sizeY = 16;
+        
     }else if(KERNEL_LENGTH <= 127){ //radius is 63
-        block_sizeX = 64;
-        block_sizeY = 8;
+        halo = 2;
     }else if (KERNEL_LENGTH <= 255){
-        block_sizeX = 128;
-        block_sizeY = 4;
+        halo = 4;
     }else{
         std::cout << "Too huge kernel length, maximum supported is 255" << "\n";
         return 0;
@@ -154,7 +152,8 @@ int main(int argc, char** argv) {
             std::to_string(pitch / sizeof(float)) + "i32, " +
             std::to_string(block_sizeX) + "i32, " +
             std::to_string(block_sizeY) + "i32, " +
-            std::to_string(result_step) + "i32)\n }";
+            std::to_string(result_step) + "i32, " + 
+            std::to_string(halo) + ")\n }";
 
     std::string program = std::string((char*)convolutionSeparable_impala) + dummy;
 
@@ -179,9 +178,7 @@ int main(int argc, char** argv) {
     }
 
     
-    for (int j = 0; j < iterations; j++){
-        call(d_Input,d_Buffer,d_Output);
-    }
+    call(d_Input,d_Buffer,d_Output);
     cudaDeviceSynchronize();
 
     cudaMemcpy2D(h_Output, imageW * sizeof(float), d_Output, pitch, imageW*sizeof(float), imageH, cudaMemcpyDeviceToHost);

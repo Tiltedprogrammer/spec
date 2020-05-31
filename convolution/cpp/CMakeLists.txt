@@ -17,8 +17,8 @@ add_executable(filter.out main.cpp
                           convolutionSeparable.cu 
                           convolutionSeparable.hpp
                           convolutionSeparable_gold.cpp 
-                          convolutionSeparable_gold.hpp defines.hpp)
+                          convolutionSeparable_gold.hpp)
 
 link_directories(/usr/X11R6/lib)
 target_link_libraries(filter.out m pthread jpeg X11)
-target_include_directories(filter.out PUBLIC ${CUDA_INCLUDE_DIRS})
+target_include_directories(filter.out PUBLIC ${CUDA_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/../include)

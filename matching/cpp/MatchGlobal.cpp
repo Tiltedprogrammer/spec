@@ -76,7 +76,8 @@ int main(int argc, char **argv)
     // multipattern_match_const_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // multipattern_match_const_sizes_wrapper(vpatterns,inputFile,input_size,0,0,resImpala,1);
     // match_pe_pointer_multipattern(vpatterns,inputFile,input_size,0,0,resImpala,1);
-    
+    // std::cout << "# of patterns " << handle->numOfPatterns << std::endl;
+
     std::cout << "Match count: " << resImpala.size() << std::endl;
     
     PFAC_status = PFAC_destroy( handle ) ;

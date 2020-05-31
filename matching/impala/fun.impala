@@ -34,7 +34,7 @@ fn threadId() -> i64{
 
 }
 
-fn string_match_pseudoKMP_nochunk(@template : &[u8], @template_size : i32, @maximalPatternSize: i8, ibuffer : &[u8], @ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32) -> (){
+fn string_match_pseudoKMP_nochunk(@template : &[u8], @template_size : i32, @maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32) -> (){
 
 
     let block = (block_size,1,1); //1024
@@ -80,7 +80,7 @@ fn matchfnc(@(template_size > 1)template : &[u8],
           t_id : i64,
           maximalPatternSize: i8,  
           ibuffer : &[u8], 
-          @ibuffer_size : i64, //right_bound if without annotation everything fails
+          ibuffer_size : i64, //right_bound if without annotation everything fails
           result_buf : &mut[u8], 
           block_size : i32, 
           chunk_size: i32,
@@ -229,10 +229,6 @@ fn compare(@(template_size > 1)template : &[u8],
            @(template_size > 1)ff : i32, //remembers that we have already matched region
            @(template_size > 1)headff : i32) -> () {
 
-
-             if(text_index < left_bound + chunk_size as i64){
-                result_buf(text_index) = 0u8;
-             }
              
              if template_index == template_size {
                 result_buf(text_index - template_size as i64) = 1u8; //text index or i?
@@ -245,7 +241,7 @@ fn compare(@(template_size > 1)template : &[u8],
                     }else if ibuffer(text_index) == template(template_index) {
                         if ff == 0 {
                             compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,headff)
-                        }else{
+                        }else{ //neg
                             compare(template,template_size,maximalPatternSize,ibuffer,ibuffer_size,left_bound,right_bound,result_buf,block_size,chunk_size,text_index+1i64,template_index + 1,f,ff+1,0)
                         }
                     }else if ff == 0 {//no common prefix 
@@ -394,7 +390,7 @@ fn comparep(@(template_size > 1)template : &[u8],
 //using unified memory for results_buf for now, blocksize = 512;
 //each thread proccesses area of chunk_size size;
 //template here should be in device memory or to be a struct;
-fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
+fn string_match(@template : &[u8], @template_size: i32, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @chunk_size: i32, @nochunk : i32 ) -> () {
              
 
             if nochunk == 1 {
@@ -415,7 +411,6 @@ fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8,
                     if t_id < ibuffer_size {
                         
                         let mut matched : i8 = 1i8;
-                        result_buf(t_id) = 0u8;
 
                         if(t_id < ibuffer_size - template_size as i64 + 1i64){
 
@@ -451,7 +446,6 @@ fn string_match(@template : &[u8], @template_size: i32 ,@maximalPatternSize: i8,
                     let left_bound :i64 = t_id * chunk_size as i64; //dynamic :(
                     if left_bound < ibuffer_size {
                         for i in range(0,chunk_size){
-                            result_buf(left_bound + i as i64) = 0u8;
                             let mut matched = 1;
                             if(i as i64 < ibuffer_size - left_bound as i64 - template_size as i64 + 1i64) {
                                 for j in unroll(0,template_size) {
@@ -505,19 +499,13 @@ fn match_internal(@?t : &[u8],@?start : i32,@?end : i32,id :u8, t_id : i64, i:i3
             }
 */
 
-fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_len : i32, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], @block_size : i32, @block_num : i32) -> (){
+fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : i32, @max_len : i32, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[i32], @block_size : i32, gx : i32, gy : i32) -> (){
     
     let block = (block_size,1,1); //1024
     // let math = cpu_intrinsics;
     // let block_num : i32 = (ibuffer_size + block(0) as i64 - 1i64 / block(0) as i64) as i32; 
                 //can be p'ed;
-    let p : i32 = (block_num / 32768); //2 >> 15
-    let mut grid = (1,1,1);
-    if p > 0 {
-        grid = ((32768) * block(0),p + 1,1);
-    } else {
-        grid = (block_num * block(0), 1 , 1);
-    }
+    let grid = (gx * block(0),gy,1);
 
     // print_string("grid is ");
     // print_i32(grid(0));
@@ -547,10 +535,10 @@ fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_
             //     }
             // }
             let mut offset = 0;
-            let mut match_result = 0u8;
+            let mut match_result = 0;
             
             if t_id < ibuffer_size - max_len as i64 + 1i64{
-                for i in unroll(0,t_num as i32){ //for each pattern
+                for i in unroll(0,t_num){ //for each pattern
                     let mut matched = 1;
                 
                     for j in unroll(0,t_sizes(i)){
@@ -563,11 +551,11 @@ fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_
                     offset = offset + t_sizes(i);
                     if matched != 0 {
                     // result_buf(t_id) = i as u8 + 1u8;
-                        match_result = i as u8 + 1u8;
+                        match_result = i + 1;
                     }
                 }
         } else{
-            for i in unroll(0,t_num as i32){ //for each pattern
+            for i in unroll(0,t_num){ //for each pattern
                 
                 let mut matched = 1;
 
@@ -583,7 +571,7 @@ fn string_match_multiple(@template : &[u8],@t_sizes : &[i32], @t_num : u8, @max_
 
                     if matched != 0 {
                     // result_buf(t_id) = i as u8 + 1u8;
-                        match_result = i as u8 + 1u8;
+                        match_result = i + 1;
                     }
                 }
                 offset = offset + t_sizes(i);
@@ -728,231 +716,142 @@ fn string_match_nope(@(false)template : &[u8], @(false)template_size: i32 ,maxim
 //TODO segfault??
 
 //CPS
-fn prefix_function(template : &[u8],t_size : i32, text_index : i32,
-                     left_bound : i32, right_bound : i32, ibuffer : &[u8],result_buf:&mut[u8],
-                     chunk:i32,index : i32, k: i32, res:i32,
-                      cont: fn(&[u8],i32,i32,i32,i32,&[u8],&mut[u8],i32,i32)->()) -> (){  //pe here ok;
+// fn prefix_function(template : &[u8],t_size : i32, text_index : i32,
+//                      left_bound : i32, right_bound : i32, ibuffer : &[u8],result_buf:&mut[u8],
+//                      chunk:i32,index : i32, k: i32, res:i32,
+//                       cont: fn(&[u8],i32,i32,i32,i32,&[u8],&mut[u8],i32,i32)->()) -> (){  //pe here ok;
 
-        fn is_prefix(@k_: i32, @i : i32) -> bool {
+//         fn is_prefix(@k_: i32, @i : i32) -> bool {
         
-            // let mut isPrefix = true;
-            if(i < k_){
-                if template(i) != template(index - k_ + 1 + i){
-                    false
-                }else{
-                    is_prefix(k_, i + 1)
-                }
-            }else {
-                true
-            }
-            // for i in unroll(0,k_){
-                // if template(i) != template(index - k_ + 1 + i) {
-                    // return(0)
-                // }
-            // }
-            // return(1);
-        }
+//             // let mut isPrefix = true;
+//             if(i < k_){
+//                 if template(i) != template(index - k_ + 1 + i){
+//                     false
+//                 }else{
+//                     is_prefix(k_, i + 1)
+//                 }
+//             }else {
+//                 true
+//             }
+//             // for i in unroll(0,k_){
+//                 // if template(i) != template(index - k_ + 1 + i) {
+//                     // return(0)
+//                 // }
+//             // }
+//             // return(1);
+//         }
 
-        // let mut res = 0;
-        if k == index + 1{
-            $cont(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,res)
-        }else if is_prefix(k,0){
-            prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,k,cont)
-        }else{
-            prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,res,cont)
-        }
-        // for k in unroll(0,index + 1) {
-            // if is_prefix(k,0) {
-                // res = k;
-            // }
-        // }
+//         // let mut res = 0;
+//         if k == index + 1{
+//             $cont(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,res)
+//         }else if is_prefix(k,0){
+//             prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,k,cont)
+//         }else{
+//             prefix_function(template,t_size,text_index,left_bound,right_bound,ibuffer,result_buf,chunk,index,k+1,res,cont)
+//         }
+//         // for k in unroll(0,index + 1) {
+//             // if is_prefix(k,0) {
+//                 // res = k;
+//             // }
+//         // }
 
-        // res
-    }
+//         // res
+//     }
 
-fn match_kmp(@template : &[u8], @t_size: i32 ,maximalPatternSize: i8, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8], block_size : i32, @chunk_size: i32, @nochunk : i32) -> (){
+fn match_kmp(@template : &[u8], @t_size: i32, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[i32], @block_size : i32, @chunk_size: i32) -> (){
 
     let math = cpu_intrinsics;
 
-    if nochunk == 0 {
-        let block = (block_size,1,1); //1024
-        let chunk = 256; //experiment with it if eq 4 compilation fails
-        let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
-        let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
-        let grid = (g * block(0),g,1);
+    let block = (block_size,1,1); //1024
+    let chunk = 256; //experiment with it if eq 4 compilation fails
+    let grid_size : i64 = (((ibuffer_size + chunk as i64 - 1i64) / chunk as i64) + block(0) as i64 - 1i64) / block(0) as i64; //1 thread takes 256 byte piece 
+    let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
+    let grid = (g * block(0),g,1);
     
-        with cuda(0,grid,block) {
+    with cuda(0,grid,block) {
 
             let t_id :i64 = threadId();
 
             let left_bound :i64 = t_id * chunk as i64;
-            let mut right_bound :i64 = left_bound + chunk as i64 + t_size as i64 -1i64; //right not included
-        
-            if right_bound >= ibuffer_size {
-                right_bound = ibuffer_size;
-            }
 
             if left_bound < ibuffer_size {
 
-                kmp(template,t_size,left_bound,left_bound,right_bound,ibuffer,ibuffer_size,result_buf,chunk,0)
+                kmp(template,t_size,left_bound,ibuffer,ibuffer_size,result_buf,chunk)
             }
         }
-    }else { //nochunk
+    
+}
 
-        let block = (block_size,1,1); //1024
-                //can be p'ed;
-        let grid_size : i64 = (ibuffer_size + block(0) as i64 - 1i64) / block(0) as i64;
-        let g : i32 = (math.sqrt(grid_size as f64) + 1.0) as i32;
-        let grid = (g * block(0),g,1);
 
-        with cuda(0,grid,block) {
-
-            let t_id :i64 = threadId();
-
-            if t_id < ibuffer_size {
-                kmp_nc(template,t_size,t_id,ibuffer,ibuffer_size,result_buf)
-            }
-        }
-
+  
+fn substr(@string : &[u8], @l1 : i32, @l2 : i32, @r1 : i32) -> i32{
+    if(l1 == r1){
+        1
+    }
+    else if(string(l1) == string(l2)){
+        substr(string,l1+1,l2+1,r1)
+    } else {
+        0
     }
 }
 
 
-// let mut ams = 0; // ams;
+fn kmp(@template : &[u8], @template_size: i32, left_bound : i64, ibuffer : &[u8],ibuffer_size : i64, result_buf : &mut[i32], @chunk_size : i32) -> () {
 
-    // for i in range(left_bound,right_bound) {;
-        
-        // if (i < left_bound + chunk_size) {;
-
-            // result_buf(i) = -1;
-
-        // };
-
-        // while ams > 0 && template(ams) != ibuffer(i) { //missmatch at i pos;
-            // ams = prefix_function(template,ams-1);
-        // };
-        
-        // if ibuffer(i) == template(ams){;
-            // ams = ams + 1;
-        // };
-
-        // if ams == template_size {;
-
-            // result_buf(i - template_size + 1) = 1;
-            // ams = prefix_function(template,ams-1);
-        
-        // };
-        
-    // };
-
-fn kmp(@template : &[u8], @template_size: i32, text_index : i64, left_bound : i64, right_bound : i64, ibuffer : &[u8],ibuffer_size : i64, result_buf : &mut[u8], @chunk_size : i32, @ams : i32) -> () {
-    
     // fn prefix_function(@index : i32) -> i32{  //pe here ok;
 
-        // fn is_prefix(@k_: i32, @i : i32) -> bool {
+    //     fn is_prefix(@k_: i32) -> bool {
         
-            // let mut isPrefix = true;
-            // if(i < k_){
-
-                // if template(i) != template(index - k_ + 1 + i){
-                    // false
-
-                // }else{
-                    // is_prefix(k_, i + 1)
-                // }
-            // }else {
-                // true
-            // }
-            // for i in unroll(0,k_){
-                // if template(i) != template(index - k_ + 1 + i) {
-                    // return(0)
-                // }
-            // }
-            // return(1);
-        // }
-
-
-        // let mut res = 0;
-            // for i in unroll(0,k_){
-        // for k in unroll(0,index + 1) {
-            // if is_prefix(k,0) {
-                // res = k;
-            // }
-        // }
-
-        // res
-    // }
-
-    // if text_index < right_bound {
-        // result_buf(text_index) = '0';
-    // }
-
-
-    // if(i < ibuffer_size - left_bound - template_size + 1){
-
-        // if ams == template_size{
-            // result_buf(text_index - template_size) = '1';
-        // }else if text_index == right_bound {
-            // return()
-        // }
-
-    // }
-
-    fn prefix_function(@index : i32) -> i32{  //pe here ok;
-
-        fn is_prefix(@k_: i32) -> bool {
+    //         let mut isPrefix = true;
         
-            let mut isPrefix = true;
-        
-            for i in unroll(0,k_){
-                if template(i) != template(index - k_ + 1 + i) {
-                    isPrefix = false;
-                }
-            }
-            isPrefix
-        }
-
-        let mut res = 0;
-        for k in unroll(0,index + 1) {
-            if is_prefix(k) {
-                res = k;
-            }
-        }
-
-        res
-    }
-
-    let mut ams = 0; // ams;
-
-
-    for i in range(0,chunk_size) {
-        
-        if (left_bound + i as i64 < right_bound) {
-
-            result_buf(left_bound + i as i64) = 0u8;
-
-        }else{
-            break()
-        }
-
-        while ams > 0 && template(ams) != ibuffer(i) { //missmatch at i pos;
-            ams = prefix_function(ams-1)
-        }
-        
-        if ibuffer(i) == template(ams){
-            ams = ams + 1;
-        }
-
-        if ams == template_size {
-
-            result_buf(i as i64 - template_size as i64 + 1 as i64) = 1u8;
-            ams = prefix_function(ams-1);
-        
-        }
-        
-    }
+    //         for i in unroll(0,k_){
+    //             if template(i) != template(index - k_ + 1 + i) {
+    //                 isPrefix = false;
+    //             }
+    //         }
+    //         isPrefix
+    //     }
     
+    //     let mut res = 0;
+    //     for k in unroll(0,index + 1) {
+    //         if @@is_prefix(k) {
+    //             res = k;
+    //         }
+    //     }
+    
+    //     res
+    // }
 
+    // let mut ams = 0; // ams;
+
+
+    // for i in range(0,chunk_size + template_size - 1) {
+    //     if (left_bound + i as i64 < ibuffer_size){
+
+    //         let mut ams = 0; // ams;
+
+    //         while ams > 0 && template(ams) != ibuffer(left_bound + i) { //missmatch at i pos;
+    //             for j in range(0,template_size){
+    //                 if ams == j {
+    //                     ams = prefix_function(j-1)
+    //                 }
+    //             }
+    //         }
+        
+    //         if ibuffer(left_bound + i) == template(ams){
+    //             ams = ams + 1;
+    //         }
+
+    //         if ams == template_size {
+
+    //             result_buf(i as i64 - template_size as i64 + 1 as i64) = 1u8;
+    //             ams = prefix_function(ams-1);
+        
+    //         }  
+        
+    // }
+            
+    //     }
 }
 
 fn kmp_nc(@template : &[u8], @template_size: i32, @t_id : i64, ibuffer : &[u8], ibuffer_size : i64, result_buf : &mut[u8]) -> (){

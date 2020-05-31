@@ -13,11 +13,13 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     "Debug" "Release")
 endif()
 
+
 find_package(AnyDSL_runtime REQUIRED)
 find_package(CUDA REQUIRED)
 set(CMAKE_CXX_STANDARD 17)
 
 add_definitions(-DBENCHMARK)
+add_definitions(-DITERATIONS_CMAKE=20)
 
 add_subdirectory(matching/impala)
 add_subdirectory(matching/cpp)
@@ -25,3 +27,4 @@ add_subdirectory(convolution/cpp)
 add_subdirectory(convolution/impala)
 add_subdirectory(aho-corasick/cpp)
 add_subdirectory(regex/cpp)
+#add_subdirectory(micro-bench)
