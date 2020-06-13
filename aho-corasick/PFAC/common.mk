@@ -42,9 +42,9 @@ LINK := $(if $(filter $(machine),x86_64),g++ -m64 -fopenmp -Wall,g++ -m32 -fopen
 
 NVCC := $(if $(filter $(machine),x86_64),nvcc -m64,nvcc -m32)
 
-#sm_support = $(shell nvcc -h | grep --only-matching "sm_[0-9][0-9]" | sort --unique)
+sm_support = $(shell nvcc -h | grep --only-matching "sm_[0-9][0-9]" | sort --unique)
 
-sm_support = sm_75
+# sm_support = (sm_75 sm_61)
 
 #
 # default CUDA library path is /usr/local/cuda

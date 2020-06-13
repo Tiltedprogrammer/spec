@@ -5,9 +5,7 @@
 // CUDA runtime
 #include <cuda_runtime.h>
 
-#define cimg_use_jpeg
 
-#include "../cimg/CImg-2.8.3/CImg.h"
 #include "../cpp/convolutionSeparable_gold.hpp"
 
 
@@ -26,8 +24,7 @@
 int main(int argc, char** argv) {
 
     cxxopts::Options options("as", " - example command line options");
-    options.add_options()("f,filename","path to image to convolve",cxxopts::value<std::string>())
-                         ("o,outfile","path to save convolved image",cxxopts::value<std::string>())
+    options.add_options()("o,outfile","path to save convolved image",cxxopts::value<std::string>())
                          ("i,isize","size of the image to generate : isize x isize",cxxopts::value<int>())
                          ("s,fsize","size of the filter to convolve with",cxxopts::value<int>())
                          ("c,static","whether to use static filters or not : 0 for not, 1 is default",cxxopts::value<int>())
@@ -47,16 +44,13 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    std::string img_path;
     int KERNEL_RADIUS = (KERNEL_LENGTH - 1) / 2;
     int image = 0;
-    if(result.count("filename")){
-        img_path = result["filename"].as<std::string>();
-        image = 1;
-    }else if(result.count("isize")){
+    
+    if(result.count("isize")){
         imageH = imageW = result["isize"].as<int>();
     }else{
-        std::cout << "Either input image or its size is required" << "\n";
+        std::cout << "Image size is required" << "\n";
         return 0;
     }
 
@@ -70,27 +64,14 @@ int main(int argc, char** argv) {
 
     int iterations = 1;
 
-    // cimg_library::CImg<float> img1("/home/alekseytyurinspb_gmail_com/specialization/spec/convolution/images/graytussaint100.jpg");
     srand(200);
     
     float* h_Input;
     
-    if(image){
-        cimg_library::CImg<float> img1(img_path.c_str());
-        imageW = img1.width();
-        imageH = img1.height();
-        h_Input = new float [imageH * imageW];
-        for (int i = 0; i < imageW * imageH; i++)
-        {
-            h_Input[i] = img1.data()[i];
-        }
-    }else{
-        long size = imageH * imageW;
-        h_Input = new float [size];
-        for (long i = 0; i < imageW * imageH; i++)
-        {
+    long size = imageH * imageW;
+    h_Input = new float [size];
+    for (long i = 0; i < imageW * imageH; i++) {
             h_Input[i] = (float)(rand() % 16);
-        }
     }
 
 
@@ -199,16 +180,6 @@ int main(int argc, char** argv) {
         delete[] (h_OutputGold);
         delete[] (h_BufferGold);
     }
-
-    // cimg_library::CImg<float> output(h_Output,img1.width(),img1.height(),1,1);
-    // cimg_library::CImg<float> convolved(h_OutputGold,img1.width(),img1.height(),1,1);
-
-    //Tests whether convolution is correct
-    // assert(convolved == output);
-
-    // output.save("impala-convolved.jpg");
-    // convolved.save("manually-convolved.jpg");
-    // std::cout << "pitch = " << pitch << "\n";
 
     delete[] (h_Input);
     delete[] (h_Kernel);

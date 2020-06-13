@@ -5,9 +5,6 @@
 // CUDA runtime
 #include <cuda_runtime.h>
 
-#define cimg_use_jpeg
-
-#include "../cimg/CImg-2.8.3/CImg.h"
 #include "convolutionSeparable.hpp"
 #include "convolutionSeparable255.hpp"
 #include "convolutionSeparable127.hpp"
@@ -21,11 +18,34 @@
 // arg parsing
 #include "../include/cxxopts.hpp"
 
+#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
+
+inline void __cudaCheckError( const char *file, const int line )
+{
+    cudaError err = cudaGetLastError();
+    if ( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+
+    // More careful checking. However, this will affect performance.
+    // Comment away if needed.
+    err = cudaDeviceSynchronize();
+    if( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() with sync failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+    return;
+}
+
 int main(int argc, char ** argv){
 
     cxxopts::Options options("as", " - example command line options");
-    options.add_options()("f,filename","path to image to convolve",cxxopts::value<std::string>())
-                         ("o,outfile","path to save convolved image",cxxopts::value<std::string>())
+    options.add_options()("o,outfile","path to save convolved image",cxxopts::value<std::string>())
                          ("i,isize","size of the image to generate : isize x isize",cxxopts::value<int>())
                          ("s,fsize","size of the filter to convolve with",cxxopts::value<int>())
                          ("c,static","whether to use static filters or not : 0 for not, 1 is default",cxxopts::value<int>())
@@ -43,20 +63,16 @@ int main(int argc, char ** argv){
         KERNEL_LENGTH = result["fsize"].as<int>();
         assert(KERNEL_LENGTH % 2 == 1);
     }else{
-        std::cout << "filter size if required" << "\n";
+        std::cout << "filter size is required" << "\n";
         return 0;
     }
 
-    std::string img_path;
     int KERNEL_RADIUS = (KERNEL_LENGTH - 1) / 2;
-    int image = 0;
-    if(result.count("filename")){
-        img_path = result["filename"].as<std::string>();
-        image = 1;
-    }else if(result.count("isize")){
+    
+    if(result.count("isize")){
         imageH = imageW = result["isize"].as<int>();
     }else{
-        std::cout << "Either input image or its size is required" << "\n";
+        std::cout << "Input image size is required" << "\n";
         return 0;
     }
 
@@ -70,29 +86,15 @@ int main(int argc, char ** argv){
 
     int iterations = 1;
 
-    // cimg_library::CImg<float> img1("/home/alekseytyurinspb_gmail_com/specialization/spec/convolution/images/graytussaint100.jpg");
     srand(200);
     
     float* h_Input;
-    
-    if(image){
-        cimg_library::CImg<float> img1(img_path.c_str());
-        imageW = img1.width();
-        imageH = img1.height();
-        h_Input = new float [imageH * imageW];
-        for (int i = 0; i < imageW * imageH; i++)
-        {
-            h_Input[i] = img1.data()[i];
-        }
-    }else{
-        long size = imageH * imageW;
-        h_Input = new float [size];
-        for (long i = 0; i < imageW * imageH; i++)
-        {
+        
+    long size = imageH * imageW;
+    h_Input = new float [size];
+    for (long i = 0; i < imageW * imageH; i++) {
             h_Input[i] = (float)(rand() % 16);
-        }
     }
-
 
     std::cout << "image size is " << imageW << "x" << imageH <<"\n";
 
@@ -110,17 +112,7 @@ int main(int argc, char ** argv){
         
     }
 
-    // for (unsigned int i = 0; i < KERNEL_LENGTH; i++) {
-    //     h_Kernel[i] /= sum;
-    // }
-
-    // for (int i = 0; i < KERNEL_LENGTH; i++) {
-    //     std::cout << h_Kernel[i] << " ";
-    // }
-    // std::cout << "\n";
-
-    size_t pitch;
-    
+    size_t pitch;   
 
     cudaMallocPitch((void**)&d_Input,&pitch,imageW * sizeof(float),imageH);
     cudaMallocPitch((void**)&d_Buffer,&pitch,imageW * sizeof(float),imageH);
@@ -178,12 +170,8 @@ int main(int argc, char ** argv){
             blockX = 32;
             blockY = 16;
         }else if(KERNEL_RADIUS <= 63){
-            // blockX = 64;
-            // blockY = 8;
             halo = 2;
         }else if(KERNEL_RADIUS <= 127){
-            // blockX = 128;
-            // blockY = 4;
             halo = 4;
         }else {
             std::cout << "Too huge length, maximum supported is 255" << "\n";
@@ -195,7 +183,11 @@ int main(int argc, char ** argv){
 
         {RUN(colConvolve(d_Output,d_Buffer,imageW,imageH,pitch / sizeof(float),KERNEL_RADIUS,blockY,blockX,8,halo))}
     
+
         cudaDeviceSynchronize();
+
+        CudaCheckError();
+        
     }
 
     
@@ -218,17 +210,6 @@ int main(int argc, char ** argv){
         delete[] (h_OutputGold);
         delete[] (h_BufferGold);
     }
-
-    // cimg_library::CImg<float> output(h_Output,imageW,imageH,1,1);
-    // cimg_library::CImg<float> convolved(h_OutputGold,imageW,imageH,1,1);
-    
-    // convolved.save("cpu-convolved.jpg");
-    // output.save("cuda-convolved.jpg");
-
-    //Tests whether convolution is correct
-    
-    // assert(convolved == output);
-    // std::cout << "pitch = " << pitch << "\n";
 
     delete[] (h_Input);
     delete[] (h_Kernel);
